@@ -1,3 +1,4 @@
+#include <alloca.h>
 #include <endian.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -10,6 +11,20 @@
 
 
 #define Unused(arg) (void)(arg)
+
+#define local_persist static
+#define global static
+#define internal static
+
+
+void *memcpy(void *dest, const void *src, size_t n)
+{
+  for (size_t i = 0; i < n; i++)
+  {
+    ((char*)dest)[i] = ((char*)src)[i];
+  }
+  return dest;
+}
 
 #if CLOSER_DEBUG
 #  define STB_SPRINTF_NOFLOAT
@@ -385,11 +400,35 @@ const char* x11_error_strs[] = {
 };
 
 
+
 typedef struct X11Request{
   u8 majorOpcode;
   u16 length;
   u8 data;
 } __attribute__((packed)) X11Request;
+
+// Events and errors both have 32 bytes
+// you can read 32 bytes 
+// check the code and pointer-cast to the right structure
+typedef struct X11GenericMessage {
+  u8 code;
+  u8 otherBytes[31];
+} X11GenericMessage;
+
+typedef struct X11GenericError {
+  u8 error;
+  u8 code;
+  u8 otherBytes[30];
+} __attribute__((packed)) X11GenericError;
+
+
+void debug_error_print(X11GenericError err)
+{
+  DebugPrintf("error(%u): %s!\n", err.code, x11_error_strs[err.code]);
+}
+
+#define MSG_ERROR 0
+#define MSG_EXPOSE 12
 
 typedef u32 X11Window;
 typedef u32 X11Colormap;
@@ -397,11 +436,16 @@ typedef u32 X11Visual;
 typedef u32 X11Drawable;
 typedef u32 X11Atom;
 
+
+typedef u32 card32;
+typedef u16 card16;
+typedef u8  card8;
+
 typedef struct X11Connection{
   u8 byteOrder;
   u8 unused; // special thanks to the writers of the spec for inconsistent info between the appendix and inital connection chapter
-  u16 protocolMajorVersion;
-  u16 protocolMinorVersion;
+  card16 protocolMajorVersion;
+  card16 protocolMinorVersion;
   u16 authProtocolNameLength;
   u16 authProtocolDataLength;
   u16 unused2;
@@ -411,21 +455,21 @@ typedef struct X11Connection{
 typedef struct X11SetupSuccessResponse {
   // u8 code; // NOTE: only not in the struct because i read it first
   u8  unused;
-  i16 protocolMajorVersion;
-  i16 protocolMinorVersion;
+  card16 protocolMajorVersion;
+  card16 protocolMinorVersion;
   u16 extraDataLengthIn4Bytes;
-  i32 releaseNumber;
-  i32 recourceIdBase;
-  i32 recourceIdMask;
-  i32 motionBufferSize;
+  card32 releaseNumber;
+  card32 resourceIdBase;
+  card32 resourceIdMask;
+  card32 motionBufferSize;
   u16 vendorLength;
-  i16 maximumRequestLength;
-  i8  screenCount;
+  card16 maximumRequestLength;
+  card8  screenCount;
   u8  pixmapFormatsCount;
   u8  imageByteOrder;
   u8  bitmapBitOrder;
-  u8  bitmapFormatScanlineUnit;
-  u8  bitmapFormatScanlinePad;
+  card8  bitmapFormatScanlineUnit;
+  card8  bitmapFormatScanlinePad;
   u8  minKeycode;
   u8  maxKeycode;
   u32 unused2;
@@ -435,22 +479,22 @@ typedef struct X11SetupSuccessResponse {
 } __attribute__((packed)) X11SetupSuccessResponse;
 
 typedef struct X11Format {
-  i8 depth, bitsPerLine, scanlinePad;
+  card8 depth, bitsPerLine, scanlinePad;
   u8 unused[5];
 } __attribute__((packed)) X11Format;
 
 typedef struct X11Screen {
   X11Window rootWindow;
   X11Colormap colormap;
-  i32 whitePixel;
-  i32 blackPixel;
-  i32 currentInputMask;
-  i16 widthInPixels;
-  i16 heightInPixels;
-  i16 widthInMillimeters;
-  i16 heightInMillimeters;
-  i16 minInstalledMaps;
-  i16 maxInstalledMaps;
+  card32 whitePixel;
+  card32 blackPixel;
+  u32 currentInputMask;
+  card16 widthInPixels;
+  card16 heightInPixels;
+  card16 widthInMillimeters;
+  card16 heightInMillimeters;
+  card16 minInstalledMaps;
+  card16 maxInstalledMaps;
   X11Visual visual;
   u8 backingStores;
   u8 saveUnders;
@@ -479,8 +523,9 @@ typedef struct X11VisualType {
 } __attribute__((packed)) X11VisualType;
 
 #define X11_RESPONSE_SUCCESS 1
+#define X11_CW_VALUES_COUNT 3
 
-typedef struct X11CreateWindowRequest {
+typedef struct X11CreateWindowReq{
   u8 opcode;
   u8 depth;
   u16 requestLength; // 8 + n of values
@@ -492,19 +537,161 @@ typedef struct X11CreateWindowRequest {
   X11Visual visual;
   u32 bitmask;
   // list of values should be arbitrary
-  // but here i only need one
-  u32 values[1]; // list of value
-} __attribute__((packed)) X11CreateWindowRequest;
+  // but in this project i will always need 4
+  u32 values[X11_CW_VALUES_COUNT]; // list of value
+} __attribute__((packed)) X11CreateWindowReq;
 
 
-void *memcpy(void *dest, const void *src, size_t n)
+global X11Screen screen;
+global int connfd;
+global u32 idBase;
+global u32 idCtr;
+global u32 idMask;
+
+#define COPY_FROM_PARENT 0
+
+#define X11_CW_BACKGROUND_PIXEL 0x02
+#define X11_CW_BORDER_PIXEL 0x08
+#define X11_CW_EVENT_MASK 0x800
+
+#define X11_EV_EXPOSE_MASK (1L << 15)
+#define X11_EV_KEY_PRESS_MASK (1L << 0)
+
+X11Window x11_create_window(
+  X11Window parent,
+  i16 x, i16 y,
+  u16 width, u16 height
+)
 {
-  for (size_t i = 0; i < n; i++)
-  {
-    ((char*)dest)[i] = ((char*)src)[i];
-  }
-  return dest;
+  X11Window result = 0;
+  X11CreateWindowReq req = {
+    .opcode = 1,
+    .depth = 0,
+    .requestLength = 8 + X11_CW_VALUES_COUNT,
+    .windowId = idCtr,
+    .parent = parent,
+    .x = x,
+    .y = y,
+    .width = width,
+    .height = height,
+    .class = COPY_FROM_PARENT,
+    .visual = COPY_FROM_PARENT,
+    .bitmask = X11_CW_BACKGROUND_PIXEL | X11_CW_BORDER_PIXEL | X11_CW_EVENT_MASK,
+    .values = {
+      screen.whitePixel,
+      screen.blackPixel,
+      X11_EV_KEY_PRESS_MASK | X11_EV_EXPOSE_MASK
+    }
+  };
+  send(connfd, (void*)&req, sizeof(req), 0);
+  result = idCtr;
+  idCtr += 1;
+  return result;
 }
+
+#define X11_CHGP_REPLACE 0
+#define X11_CHGP_PREPEND 1
+#define X11_CHGP_APPEND 2
+
+typedef struct X11ChangePropertyReq{
+  u8 opcode;
+  u8 mode;
+  u16 reqLen;
+  X11Window window;
+  X11Atom property;
+  X11Atom type;
+  u8 format;
+  u8 unused[3];
+  u32 formatLen;
+  // bytes follow...
+} __attribute__((packed)) X11ChangePropertyReq;
+
+#define X11Pad(E) ((4 - (E % 4)) % 4)
+
+// taken from https://gitlab.freedesktop.org/xorg/lib/libx11/-/blob/master/src/StName.c
+// @Verify
+#define X11A_WM_NAME ((X11Atom)39)
+#define X11A_STRING ((X11Atom)31)
+
+void x11_change_property(
+  X11Window window,
+  X11Atom property,
+  X11Atom type,
+  u8 format,
+  u8 mode,
+  u8* data,
+  usize elementCount
+)
+{
+  u32 elementSizeInBytes = format/8;
+  u32 size = elementSizeInBytes * elementCount;
+  u32 pad = X11Pad(size);
+  X11ChangePropertyReq req = {
+    .opcode = 18,
+    .mode = mode,
+    .reqLen = 6 + (size + pad)/4,
+    .window = window,
+    .property = property,
+    .type = type,
+    .format = format,
+    .formatLen = elementCount,
+  };
+  send(connfd, (void*)&req, sizeof(req), 0);
+  send(connfd, data, size, 0);
+  char paddingbytes[4] = {0};
+  if (pad > 0)
+  {
+    send(connfd, paddingbytes, pad, 0);
+  }
+}
+
+void x11_window_set_name(X11Window window, char* name, u16 nameLen)
+{
+  x11_change_property(
+    window,
+    X11A_WM_NAME,
+    X11A_STRING,
+    8,
+    X11_CHGP_REPLACE,
+    (u8*)name,
+    nameLen
+  );
+#if 0
+  X11ChangePropertyReq req = {
+    .opcode = 18,
+    .mode = X11_CHGP_REPLACE,
+    .reqLen = 6+(nameLen+X11Pad(nameLen))/4,
+    .window = window,
+    .property = X11A_WM_NAME,
+    .type = X11A_STRING,
+    .format = 8,
+    .formatLen = nameLen,
+  };
+  if (nameLen > 250) return;
+  char nameBuffer[256] = {0};
+  memcpy(nameBuffer, name, (usize)nameLen);
+  send(connfd, (void*)&req, sizeof(req), 0);
+  send(connfd, nameBuffer, nameLen+X11Pad(nameLen), 0);
+#endif
+}
+
+typedef struct X11MapWindowReq {
+  u8 opcode, unused;
+  u16 requestLen;
+  X11Window window;
+} __attribute__((packed)) X11MapWindowReq;
+
+void x11_map_window(X11Window window)
+{
+  X11MapWindowReq req = {
+    .opcode = 8,
+    .requestLen = sizeof(X11MapWindowReq)/4,
+    .window = window
+  };
+  send(connfd, (void*)&req, sizeof(X11MapWindowReq), 0);
+}
+
+
 #define PrintCstr(cstr) write(1, cstr, sizeof(cstr)-1)
 
 void* alloc(usize size)
@@ -575,6 +762,11 @@ int main(void)
   X11SetupSuccessResponse response = {0};
   recv(fd, &response, sizeof(response), 0);
 
+  DebugPrintf("id base: %x, mask: %x\n", response.resourceIdBase, response.resourceIdMask);
+  idBase = response.resourceIdBase;
+  idCtr = idBase;
+  idMask = response.resourceIdMask;
+
   DebugPrintf("screens count: %d\n", response.screenCount);
   DebugPrintf("formats count: %u\n", response.pixmapFormatsCount);
   DebugPrintf("vendor length: %u\n", response.vendorLength);
@@ -603,7 +795,7 @@ int main(void)
   char* vendor = mem;
   X11Format* formats = (void*)((char*)mem + vendorLenAligned);
   X11Screen* screens = (void*)(formats + response.pixmapFormatsCount);
-  char* extraData = (void*)(screens + response.screenCount);
+  //char* extraData = (void*)(screens + response.screenCount);
 
   DebugPrintf("receiving extars\n", 0);
   //
@@ -632,9 +824,9 @@ int main(void)
   }
 
   // receive screens info
-  usize ctr = 0;
   {
     recv(fd, screens, screensSize, 0);
+    screen = screens[0];
     DebugPrintf("Screens(%d):\n", response.screenCount);
     for (i32 i = 0;i < response.screenCount;++i)
     {
@@ -644,7 +836,6 @@ int main(void)
       X11Depth depth = {0};
       for (i8 j = 0;j < screens[i].allowedDepthsCount;++j)
       {
-        ctr += sizeof(X11Depth);
         recv(fd, &depth, sizeof(X11Depth), 0);
         //DebugPrintf("--depth%d: visual = %u\n", j+1, depth.numberOfVisuals);
         usize visualTypesSize = sizeof(X11VisualType) * (usize)depth.numberOfVisuals;
@@ -653,12 +844,11 @@ int main(void)
         {
           X11VisualType* visualTypes = alloc(visualTypesSize);
           recv(fd, visualTypes, visualTypesSize, 0);
-          for (u16 k = 0;k < depth.numberOfVisuals;++k)
-          {
-            ctr += sizeof(X11VisualType);
-            X11VisualType* v = &visualTypes[k];
-            //DebugPrintf("----visual%u: bits = %d, red = %x, green = %x, blue = %x\n", k, v->bitsPerRgbValue, v->redMask, v->greenMask, v->blueMask);
-          }
+          //for (u16 k = 0;k < depth.numberOfVisuals;++k)
+          //{
+          //  X11VisualType* v = &visualTypes[k];
+          //  //DebugPrintf("----visual%u: bits = %d, red = %x, green = %x, blue = %x\n", k, v->bitsPerRgbValue, v->redMask, v->greenMask, v->blueMask);
+          //}
           munmap(visualTypes, visualTypesSize);
         }
       }
@@ -682,11 +872,51 @@ int main(void)
   }
   else
   {
-    DebugPrintf("Still work to do!\n", 0);
+    DebugPrintf("Still wor to do!\n", 0);
   }
 #endif
+  connfd = fd;
 
 // APP INITIALIZATION
+  X11GenericMessage msg = {0};
+  X11GenericError err = {0};
+  
+  X11Window window = x11_create_window(screen.rootWindow, 100, 100, 300, 100);
+  PrintCstr("here\n");
+  
+  //recv(connfd, (void*)&err, sizeof(X11GenericError), 0);
+  //debug_error_print(err);
+  PrintCstr("here\n");
+
+  char mainWindowName[] = "Closer";
+  //x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
+  x11_map_window(window);
+
+  
+  while (1)
+  {
+    recv(connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
+    switch (msg.code)
+    {
+      case MSG_ERROR:
+        {
+          X11GenericError* err = (X11GenericError*)&msg;
+          debug_error_print(*err);
+          break;
+        }
+      case MSG_EXPOSE:
+        {
+          DebugPrintf("Expose event\n", 0);
+          break;
+        }
+      default:
+        {
+          DebugPrintf("Other msg %u\n", msg.code);
+          break;
+        }
+    }
+  }
+
 
 
 //mem_unmap:
