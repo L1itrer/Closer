@@ -1,3 +1,4 @@
+#include <X11/Xlib.h>
 #include <alloca.h>
 #include <endian.h>
 #include <stdarg.h>
@@ -24,6 +25,15 @@ void *memcpy(void *dest, const void *src, size_t n)
     ((char*)dest)[i] = ((char*)src)[i];
   }
   return dest;
+}
+
+
+size_t strlen(const char *s)
+{
+  const char* a = s;
+  size_t count = 0;
+  while (*a++ != 0) count++;
+  return count;
 }
 
 #if CLOSER_DEBUG
@@ -425,9 +435,12 @@ typedef struct X11GenericMessage {
   u8 otherBytes[31];
 } X11GenericMessage;
 
-typedef struct X11EventKeyPress{
+// the structure for key press and button press events
+// they both share the exact same layout
+// only keycodes are different
+typedef struct X11EventKeyPressButtonPress{
   u8 code;
-  card8 keycodeDetail;
+  card8 detail;
   card16 sequenceNumber;
   card32 timestamp;
   X11Window root;
@@ -440,11 +453,15 @@ typedef struct X11EventKeyPress{
   u16 state;
   bool8 sameScreen;
   u8 unused;
-} __attribute__((packed)) X11EventKeyPress;
+} __attribute__((packed)) X11EventKeyPressButtonPress;
+
 
 #define KEY_PRESS_Q 24
 #define KEY_PRESS_ESC 9
 #define KEY_PRESS_RETURN 36
+
+#define BUTTON_PRESS_LEFT 1
+#define BUTTON_PRESS_RIGHT 3
 
 typedef struct X11GenericError {
   u8 error;
@@ -460,6 +477,7 @@ void debug_error_print(X11GenericError err)
 
 #define MSG_ERROR 0
 #define MSG_KEYPRESS 2
+#define MSG_BUTTONPRESS 4
 #define MSG_EXPOSE 12
 
 
@@ -638,6 +656,7 @@ typedef struct X11ChangePropertyReq{
 // @Verify
 #define X11A_WM_NAME ((X11Atom)39)
 #define X11A_STRING ((X11Atom)31)
+#define X11A_ATOM ((X11Atom)4)
 
 void x11_change_property(
   X11Window window,
@@ -717,6 +736,43 @@ void x11_map_window(X11Window window)
   send(connfd, (void*)&req, sizeof(X11MapWindowReq), 0);
 }
 
+typedef struct X11InternAtomReq {
+  u8 opcode;
+  bool8 onlyIfExists;
+  u16 reqLen;
+  u16 nameLen;
+  u16 unused;
+} __attribute__((packed)) X11InternAtomReq;
+
+typedef struct X11InternAtomReply {
+  u8 reply;
+  u8 unused;
+  card16 sequenceNumber;
+  u32 replyLen; // always 0
+  X11Atom atom; // can be null!
+  u8 unused2[20];
+} __attribute__((packed))  X11InternAtomReply;
+
+internal X11Atom x11_intern_atom(const char* name, bool8 onlyIfExists)
+{
+  usize nameLen = strlen(name);
+  usize padLen = X11Pad(nameLen);
+  X11InternAtomReq req = {
+    .opcode = 16,
+    .onlyIfExists = onlyIfExists,
+    .reqLen = 2 + (nameLen + padLen)/4,
+    .nameLen = nameLen,
+  };
+  char padbytes[4] = {0};
+  send(connfd, (void*)&req, sizeof(req), 0);
+  send(connfd, name, nameLen, 0);
+  if (padLen > 0) send(connfd, padbytes, padLen, 0);
+  
+  X11InternAtomReply reply = {0};
+  recv(connfd, (void*)&reply, sizeof(reply), 0);
+  return reply.atom;
+}
+
 
 #define PrintCstr(cstr) write(1, cstr, sizeof(cstr)-1)
 
@@ -792,6 +848,7 @@ int main(void)
   idBase = response.resourceIdBase;
   idCtr = idBase;
   idMask = response.resourceIdMask;
+  usize ctr = 0;
 
   DebugPrintf("screens count: %d\n", response.screenCount);
   DebugPrintf("formats count: %u\n", response.pixmapFormatsCount);
@@ -821,19 +878,20 @@ int main(void)
   char* vendor = mem;
   X11Format* formats = (void*)((char*)mem + vendorLenAligned);
   X11Screen* screens = (void*)(formats + response.pixmapFormatsCount);
-  //char* extraData = (void*)(screens + response.screenCount);
 
   DebugPrintf("receiving extars\n", 0);
   //
   // NOTE: extraDataLength specifies ALL the memory necessery to
   // init x11
+  // you could just recv everything at once
   //recv(fd, mem, (usize)response.extraDataLengthIn4Bytes * 4ULL, 0);
   //goto poll;
   
-  // reveive vendor info
+  // receive vendor info
   if (vendorLenAligned > 0)
   {
     recv(fd, vendor, vendorLenAligned, 0);
+    ctr += vendorLenAligned;
   }
   DebugPrintf("vendor: %.*s\n", vendorLenAligned, vendor);
 
@@ -841,6 +899,7 @@ int main(void)
   if (response.pixmapFormatsCount > 0)
   {
     recv(fd, formats, formatsSize, 0);
+    ctr += formatsSize;
   }
 
   DebugPrintf("Formats(%u):\n", response.pixmapFormatsCount);
@@ -852,6 +911,7 @@ int main(void)
   // receive screens info
   {
     recv(fd, screens, screensSize, 0);
+    ctr += screensSize;
     screen = screens[0];
     DebugPrintf("Screens(%d):\n", response.screenCount);
     for (i32 i = 0;i < response.screenCount;++i)
@@ -863,6 +923,7 @@ int main(void)
       for (i8 j = 0;j < screens[i].allowedDepthsCount;++j)
       {
         recv(fd, &depth, sizeof(X11Depth), 0);
+        ctr += sizeof(X11Depth);
         //DebugPrintf("--depth%d: visual = %u\n", j+1, depth.numberOfVisuals);
         usize visualTypesSize = sizeof(X11VisualType) * (usize)depth.numberOfVisuals;
 
@@ -870,6 +931,7 @@ int main(void)
         {
           X11VisualType* visualTypes = alloc(visualTypesSize);
           recv(fd, visualTypes, visualTypesSize, 0);
+          ctr += visualTypesSize;
           //for (u16 k = 0;k < depth.numberOfVisuals;++k)
           //{
           //  X11VisualType* v = &visualTypes[k];
@@ -879,11 +941,7 @@ int main(void)
         }
       }
     }
-    
   }
-
-
-  // receive extra info
 
 #ifdef CLOSER_DEBUG
   DebugPrintf("\n", 0);
@@ -901,6 +959,7 @@ int main(void)
     DebugPrintf("Still work to do!\n", 0);
   }
 #endif
+  DebugPrintf("Received in total %zu bytes\n", ctr);
   connfd = fd;
 
 // APP INITIALIZATION
@@ -909,6 +968,22 @@ int main(void)
 
   char mainWindowName[] = "Closer";
   x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
+
+  X11Atom windowManager = x11_intern_atom("_NET_WM_WINDOW_TYPE", 0);
+  X11Atom util = x11_intern_atom("_NET_WM_WINDOW_TYPE_UTILITY", 0);
+
+  x11_change_property(
+    window,
+    windowManager,
+    X11A_ATOM,
+    32,
+    X11_CHGP_REPLACE,
+    (unsigned char*)&util,
+    1
+  );
+
+
+
   x11_map_window(window);
 
   
@@ -931,9 +1006,15 @@ int main(void)
         }
       case MSG_KEYPRESS:
         {
-          X11EventKeyPress* kv = (X11EventKeyPress*)&msg;
-          if (kv->keycodeDetail == KEY_PRESS_Q || kv->keycodeDetail == KEY_PRESS_ESC) running = 0;
-          DebugPrintf("Keypress: %u\n", kv->keycodeDetail);
+          X11EventKeyPressButtonPress* kv = (X11EventKeyPressButtonPress*)&msg;
+          if (kv->detail == KEY_PRESS_Q || kv->detail == KEY_PRESS_ESC) running = 0;
+          DebugPrintf("Keypress: %u\n", kv->detail);
+          break;
+        }
+      case MSG_BUTTONPRESS:
+        {
+          X11EventKeyPressButtonPress* kb = (X11EventKeyPressButtonPress*)&msg;
+          DebugPrintf("Keypress: %u\n", kb->detail);
           break;
         }
       default:
