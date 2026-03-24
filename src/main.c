@@ -78,6 +78,11 @@ typedef i8 bool8;
 typedef i32 bool32;
 
 
+typedef u32 card32;
+typedef u16 card16;
+typedef u8  card8;
+
+
 __attribute__((naked)) void* syscall1
 (
   __attribute__((unused)) void* sys_code,
@@ -362,6 +367,11 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
   );
 }
 
+typedef u32 X11Window;
+typedef u32 X11Colormap;
+typedef u32 X11Visual;
+typedef u32 X11Drawable;
+typedef u32 X11Atom;
 
 
 // ERRORS
@@ -415,6 +425,27 @@ typedef struct X11GenericMessage {
   u8 otherBytes[31];
 } X11GenericMessage;
 
+typedef struct X11EventKeyPress{
+  u8 code;
+  card8 keycodeDetail;
+  card16 sequenceNumber;
+  card32 timestamp;
+  X11Window root;
+  X11Window event;
+  X11Window child;
+  i16 rootX;
+  i16 rootY;
+  i16 eventX;
+  i16 eventY;
+  u16 state;
+  bool8 sameScreen;
+  u8 unused;
+} __attribute__((packed)) X11EventKeyPress;
+
+#define KEY_PRESS_Q 24
+#define KEY_PRESS_ESC 9
+#define KEY_PRESS_RETURN 36
+
 typedef struct X11GenericError {
   u8 error;
   u8 code;
@@ -428,18 +459,11 @@ void debug_error_print(X11GenericError err)
 }
 
 #define MSG_ERROR 0
+#define MSG_KEYPRESS 2
 #define MSG_EXPOSE 12
 
-typedef u32 X11Window;
-typedef u32 X11Colormap;
-typedef u32 X11Visual;
-typedef u32 X11Drawable;
-typedef u32 X11Atom;
 
 
-typedef u32 card32;
-typedef u16 card16;
-typedef u8  card8;
 
 typedef struct X11Connection{
   u8 byteOrder;
@@ -536,8 +560,9 @@ typedef struct X11CreateWindowReq{
   u16 class;
   X11Visual visual;
   u32 bitmask;
+  // @Hardcode
   // list of values should be arbitrary
-  // but in this project i will always need 4
+  // but in this project i will always need 3
   u32 values[X11_CW_VALUES_COUNT]; // list of value
 } __attribute__((packed)) X11CreateWindowReq;
 
@@ -556,6 +581,7 @@ global u32 idMask;
 
 #define X11_EV_EXPOSE_MASK (1L << 15)
 #define X11_EV_KEY_PRESS_MASK (1L << 0)
+#define X11_EV_BUTTON_PRESS_MASK (1L << 2)
 
 X11Window x11_create_window(
   X11Window parent,
@@ -567,7 +593,7 @@ X11Window x11_create_window(
   X11CreateWindowReq req = {
     .opcode = 1,
     .depth = 0,
-    .requestLength = 8 + X11_CW_VALUES_COUNT,
+    .requestLength = 8 + X11_CW_VALUES_COUNT, // @Hardcode
     .windowId = idCtr,
     .parent = parent,
     .x = x,
@@ -577,10 +603,10 @@ X11Window x11_create_window(
     .class = COPY_FROM_PARENT,
     .visual = COPY_FROM_PARENT,
     .bitmask = X11_CW_BACKGROUND_PIXEL | X11_CW_BORDER_PIXEL | X11_CW_EVENT_MASK,
-    .values = {
+    .values = { // @Hardcode
       screen.whitePixel,
       screen.blackPixel,
-      X11_EV_KEY_PRESS_MASK | X11_EV_EXPOSE_MASK
+      X11_EV_KEY_PRESS_MASK | X11_EV_EXPOSE_MASK | X11_EV_BUTTON_PRESS_MASK
     }
   };
   send(connfd, (void*)&req, sizeof(req), 0);
@@ -872,28 +898,22 @@ int main(void)
   }
   else
   {
-    DebugPrintf("Still wor to do!\n", 0);
+    DebugPrintf("Still work to do!\n", 0);
   }
 #endif
   connfd = fd;
 
 // APP INITIALIZATION
   X11GenericMessage msg = {0};
-  X11GenericError err = {0};
-  
   X11Window window = x11_create_window(screen.rootWindow, 100, 100, 300, 100);
-  PrintCstr("here\n");
-  
-  //recv(connfd, (void*)&err, sizeof(X11GenericError), 0);
-  //debug_error_print(err);
-  PrintCstr("here\n");
 
   char mainWindowName[] = "Closer";
-  //x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
+  x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
   x11_map_window(window);
 
   
-  while (1)
+  bool32 running = 1;
+  while (running)
   {
     recv(connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
     switch (msg.code)
@@ -907,6 +927,13 @@ int main(void)
       case MSG_EXPOSE:
         {
           DebugPrintf("Expose event\n", 0);
+          break;
+        }
+      case MSG_KEYPRESS:
+        {
+          X11EventKeyPress* kv = (X11EventKeyPress*)&msg;
+          if (kv->keycodeDetail == KEY_PRESS_Q || kv->keycodeDetail == KEY_PRESS_ESC) running = 0;
+          DebugPrintf("Keypress: %u\n", kv->keycodeDetail);
           break;
         }
       default:
