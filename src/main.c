@@ -455,6 +455,19 @@ typedef struct X11EventKeyPressButtonPress{
   u8 unused;
 } __attribute__((packed)) X11EventKeyPressButtonPress;
 
+typedef struct X11EventClientMessage {
+  u8 code;
+  card8 format;
+  card16 sequenceNumber;
+  X11Window window;
+  X11Atom type;
+	union {
+		u8 b[20];
+		u16 s[10];
+		u32 l[5];
+		} data;
+} __attribute__((packed)) X11EventClientMessage;
+
 
 #define KEY_PRESS_Q 24
 #define KEY_PRESS_ESC 9
@@ -479,6 +492,7 @@ void debug_error_print(X11GenericError err)
 #define MSG_KEYPRESS 2
 #define MSG_BUTTONPRESS 4
 #define MSG_EXPOSE 12
+#define MSG_CLIENT_MESSAGE 33
 
 
 
@@ -982,6 +996,19 @@ int main(void)
     1
   );
 
+  X11Atom wmProtocols = x11_intern_atom("WM_PROTOCOLS", 0);
+  wmProtocols = x11_intern_atom("WM_PROTOCOLS", 0);
+  X11Atom deleteWindow = x11_intern_atom("WM_DELETE_WINDOW", 0);
+  x11_change_property(
+    window,
+    wmProtocols,
+    X11A_ATOM,
+    32,
+    X11_CHGP_REPLACE,
+    (u8*)&deleteWindow,
+    1
+  );
+
 
 
   x11_map_window(window);
@@ -1015,6 +1042,14 @@ int main(void)
         {
           X11EventKeyPressButtonPress* kb = (X11EventKeyPressButtonPress*)&msg;
           DebugPrintf("Keypress: %u\n", kb->detail);
+          break;
+        }
+      case (MSG_CLIENT_MESSAGE + 128): // most significant bit set means message sent through SendEvent
+      case MSG_CLIENT_MESSAGE:
+        {
+          X11EventClientMessage* cl = (X11EventClientMessage*)&msg;
+          DebugPrintf("Client message %u\n", cl->data.l[0]);
+          if (cl->data.l[0] == deleteWindow) running = 0;
           break;
         }
       default:
