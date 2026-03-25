@@ -142,7 +142,7 @@ int main(void)
 
 
 
-  Atom wm_protocols = XInternAtom(display, "WM_PROTOCOLS", False);
+  Atom wmProtocols = XInternAtom(display, "WM_PROTOCOLS", False);
   Atom deleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", False);
   XSetWMProtocols(display, window, &deleteWindow, 1);
 

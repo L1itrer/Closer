@@ -378,6 +378,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 }
 
 typedef u32 X11Window;
+typedef u32 X11GC;
 typedef u32 X11Colormap;
 typedef u32 X11Visual;
 typedef u32 X11Drawable;
@@ -581,6 +582,13 @@ typedef struct X11VisualType {
 #define X11_RESPONSE_SUCCESS 1
 #define X11_CW_VALUES_COUNT 3
 
+
+global X11Screen screen;
+global int connfd;
+global u32 idBase;
+global u32 idCtr;
+global u32 idMask;
+
 typedef struct X11CreateWindowReq{
   u8 opcode;
   u8 depth;
@@ -598,12 +606,29 @@ typedef struct X11CreateWindowReq{
   u32 values[X11_CW_VALUES_COUNT]; // list of value
 } __attribute__((packed)) X11CreateWindowReq;
 
+typedef struct X11CreateGCReq {
+  u8 opcode;
+  u8 unused;
+  u16 reqLen;
+  X11GC cid;
+  u32 drawable;
+  u32 bitmask;
+  // list of values follows
+} __attribute__((packed)) X11CreateGCReq;
 
-global X11Screen screen;
-global int connfd;
-global u32 idBase;
-global u32 idCtr;
-global u32 idMask;
+X11GC x11_create_gc_basic(X11Window window)
+{
+  X11CreateGCReq req = {
+    .opcode = 55,
+    .reqLen = 4, // no extra values
+    .cid = idCtr,
+    .drawable = window,
+  };
+  idCtr++;
+  send(connfd, (void*)&req, sizeof(req), 0);
+  return req.cid;
+}
+
 
 #define COPY_FROM_PARENT 0
 
@@ -1010,6 +1035,7 @@ int main(void)
   );
 
 
+  X11GC mainGC = x11_create_gc_basic(window);
 
   x11_map_window(window);
 
@@ -1048,7 +1074,7 @@ int main(void)
       case MSG_CLIENT_MESSAGE:
         {
           X11EventClientMessage* cl = (X11EventClientMessage*)&msg;
-          DebugPrintf("Client message %u\n", cl->data.l[0]);
+          DebugPrintf("Client message\n", 0);
           if (cl->data.l[0] == deleteWindow) running = 0;
           break;
         }
