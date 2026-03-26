@@ -1,3 +1,13 @@
+/*
+ * TODO:
+ * - extend x11_create_window
+ * - introduce memory arenas and extract the x11 initalization
+ * - read display from env
+ * - try connecting to a port if file not exists
+ * - read available x11 extensions
+ * - draw custom strings
+ * - improve the ui
+ */
 #include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -10,11 +20,7 @@
 #include "closer.h"
 #include "x11_client.h"
 
-#ifdef __x86_64__
-  #include "syscalls.c"
-#else
-  #error No initialization layer defined for this architecture!
-#endif
+#include "syscalls.c"
 
 #define PrintCstr(cstr) write(1, cstr, sizeof(cstr)-1)
 
@@ -326,8 +332,11 @@ const char* buttonTexts[] = {"Poweroff", "Reboot", "Suspend", "Cancel"};
 
 const ButtonFuncType buttonActions[] = {action_poweroff, action_reboot, action_suspend, action_cancel};
 
-int main(void)
+int main(int argc, char* argv[], char* env[])
 {
+  Unused(argc);
+  Unused(argv);
+  Unused(env);
   int programResult = 0;
   
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -576,7 +585,7 @@ int main(void)
         }
       case MSG_KEYPRESS:
         {
-          X11EventKeyPressButtonPress* kv = (X11EventKeyPressButtonPress*)&msg;
+          X11EventInput* kv = (X11EventInput*)&msg;
           if (kv->detail == KEY_PRESS_Q || kv->detail == KEY_PRESS_ESC) running = 0;
           if (kv->detail == KEY_PRESS_RIGHT || kv->detail == KEY_PRESS_LEFT)
           {
@@ -601,7 +610,7 @@ int main(void)
         }
       case MSG_BUTTONPRESS:
         {
-          X11EventKeyPressButtonPress* kb = (X11EventKeyPressButtonPress*)&msg;
+          X11EventInput* kb = (X11EventInput*)&msg;
           for (int i = 0;i < __BUTTON_COUNT;++i)
           {
             if (kb->event == buttonWnds[i])

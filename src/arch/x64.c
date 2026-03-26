@@ -131,6 +131,11 @@ __attribute__((naked)) void _start(void)
 {
   __asm__ __volatile__
   (
+    "mov (%rsp), %rdi\n"
+    "lea 8(%rsp), %rsi\n"
+    "lea 16(%rsp, %rdi, 8), %rdx\n"
+    // system v abi gurantees alignment at startup 
+    // but still better safe than sorry
     "and $0xfffffffffffffff0, %rsp\n"
     "call main\n"
     "mov %rax, %rdi\n"

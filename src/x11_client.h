@@ -96,7 +96,7 @@ typedef struct X11EventExpose {
 // the structure for key press and button press events
 // they both share the exact same layout
 // only keycodes are different
-typedef struct X11EventKeyPressButtonPress{
+typedef struct X11EventInput{
   u8 code;
   card8 detail;
   card16 sequenceNumber;
@@ -111,7 +111,7 @@ typedef struct X11EventKeyPressButtonPress{
   u16 state;
   bool8 sameScreen;
   u8 unused;
-} __attribute__((packed)) X11EventKeyPressButtonPress;
+} __attribute__((packed)) X11EventInput;
 
 typedef struct X11EventClientMessage {
   u8 code;
