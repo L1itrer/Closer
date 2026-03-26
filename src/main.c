@@ -386,6 +386,8 @@ typedef u32 X11Colormap;
 typedef u32 X11Visual;
 typedef u32 X11Drawable;
 typedef u32 X11Atom;
+typedef u32 X11Pixmap;
+typedef u32 X11Cursor;
 
 
 // ERRORS
@@ -485,6 +487,9 @@ typedef struct X11EventClientMessage {
 #define KEY_PRESS_Q 24
 #define KEY_PRESS_ESC 9
 #define KEY_PRESS_RETURN 36
+
+#define KEY_PRESS_RIGHT 114
+#define KEY_PRESS_LEFT 113
 
 #define BUTTON_PRESS_LEFT 1
 #define BUTTON_PRESS_RIGHT 3
@@ -840,6 +845,86 @@ void x11_map_subwindows(X11Window window)
   send(connfd, (void*)&req, sizeof(req), 0);
 }
 
+typedef struct X11ClearAreaReq {
+  u8 opcode;
+  bool8 exposures;
+  u16 reqLen;
+  X11Window window;
+  i16 x, y;
+  card16 width, height;
+} __attribute__((packed)) X11ClearAreaReq;
+
+void x11_clear_area(X11Window window, i16 x, i16 y, u16 width, u16 height, bool8 exposures)
+{
+  X11ClearAreaReq req = {
+    .opcode = 61,
+    .exposures = exposures,
+    .reqLen = 4,
+    .window = window,
+    .x = x,
+    .y = y,
+    .width = width,
+    .height = height,
+  };
+  send(connfd, (void*)&req, sizeof(req), 0);
+}
+
+void x11_clear_window(X11Window window, bool8 exposures)
+{
+  x11_clear_area(window, 0, 0, 0, 0, exposures);
+}
+
+typedef struct X11ChangeWindowAttributesReq {
+  u8 opcode;
+  u8 unused;
+  u16 reqLen;
+  X11Window window;
+  u32 bitmask;
+} __attribute__((packed)) X11ChangeWindowAttributesReq;
+
+
+typedef struct X11WindowAttributes {
+    X11Pixmap backgroundPixmap;	/* background or None or ParentRelative */
+    u32 backgroundPixel;	/* background pixel */
+    X11Pixmap borderPixmap;	/* border of the window */
+    u32 borderPixel;	/* border pixel value */
+    i32 bitGravity;		/* one of bit gravity values */
+    i32 winGravity;		/* one of the window gravity values */
+    i32 backingStore;		/* NotUseful, WhenMapped, Always */
+    u32 backingPlanes;/* planes to be preserved if possible */
+    u32 backingPixel;/* value to use in restoring planes */
+    bool32 saveUnder;		/* should bits under be saved? (popups) */
+    u32 eventMask;		/* set of events that should be saved */
+    u32 doNotPropagateMask;	/* set of events that should not propagate */
+    bool32 overrideRedirect;	/* boolean value for override-redirect */
+    X11Colormap colormap;		/* color map to be associated with window */
+    X11Cursor cursor;		/* cursor to be displayed (or None) */
+} X11WindowAttributes;
+
+void x11_change_window_attributes(X11Window window, u32 bitmask, X11WindowAttributes* attribs)
+{
+  u8 memory[sizeof(X11ChangeWindowAttributesReq) + sizeof(X11WindowAttributes)] = {0};
+  usize len = sizeof(X11ChangeWindowAttributesReq);
+  X11ChangeWindowAttributesReq* req = (void*)memory;
+  u32* values = (u32*)(req + 1);
+  i32 attributesCount = sizeof(X11WindowAttributes)/sizeof(u32);
+  i32 count = 0;
+  for (i32 i = 0;i < attributesCount;++i)
+  {
+    if (bitmask & (1 << i))
+    {
+      len += 4;
+      values[i] = (u32)(((u32*)attribs)[count]);
+      count += 1;
+    }
+  }
+  req->opcode = 2;
+  req->reqLen = len/4;
+  req->window = window;
+  req->bitmask = bitmask;
+  send(connfd, (void*)memory, len, 0);
+}
+
 typedef struct X11InternAtomReq {
   u8 opcode;
   bool8 onlyIfExists;
@@ -1160,8 +1245,25 @@ int main(void)
     buttonGCs[i] = x11_create_gc_basic(buttonWnds[i]);
   }
 
+
+
+  u32 valuemask = X11_CW_BACKGROUND_PIXEL | X11_CW_BORDER_PIXEL | X11_CW_EVENT_MASK;
+
+  X11WindowAttributes defAttribs = {
+    .eventMask = ExposureMask | KeyPressMask | ButtonPressMask,
+    .borderPixel = screen.blackPixel,
+    .backgroundPixel = screen.whitePixel,
+  };
+
+  X11WindowAttributes selectedAttribs = {
+    .eventMask = ExposureMask | KeyPressMask | ButtonPressMask,
+    .borderPixel = screen.blackPixel,
+    .backgroundPixel = 0xFFee8080 ,
+  };
+
   
   bool32 running = 1;
+  u32 selectedIdx;
   static char mainMsg[] = "Poweroff the device?";
   while (running)
   {
@@ -1195,13 +1297,39 @@ int main(void)
         {
           X11EventKeyPressButtonPress* kv = (X11EventKeyPressButtonPress*)&msg;
           if (kv->detail == KEY_PRESS_Q || kv->detail == KEY_PRESS_ESC) running = 0;
+          if (kv->detail == KEY_PRESS_RIGHT || kv->detail == KEY_PRESS_LEFT)
+          {
+            x11_change_window_attributes(buttonWnds[selectedIdx], valuemask, &defAttribs);
+            x11_clear_window(buttonWnds[selectedIdx], FALSE);
+            x11_poly_text8(buttonWnds[selectedIdx], buttonGCs[selectedIdx], 10, WINDOW_HEIGHT/2/2, (char*)buttonTexts[selectedIdx], strlen(buttonTexts[selectedIdx]));
+
+            selectedIdx = (selectedIdx + (kv->detail == KEY_PRESS_RIGHT ? 1 : -1)) % __BUTTON_COUNT;
+
+            x11_change_window_attributes(buttonWnds[selectedIdx], valuemask, &selectedAttribs);
+            x11_clear_window(buttonWnds[selectedIdx], FALSE);
+            x11_poly_text8(buttonWnds[selectedIdx], buttonGCs[selectedIdx], 10, WINDOW_HEIGHT/2/2, (char*)buttonTexts[selectedIdx], strlen(buttonTexts[selectedIdx]));
+            DebugPrintf("selectedIdx = %u\n", selectedIdx);
+          }
+          if (kv->detail == KEY_PRESS_RETURN)
+          {
+            buttonActions[selectedIdx]();
+            running = FALSE;
+          }
           DebugPrintf("Keypress: %u\n", kv->detail);
           break;
         }
       case MSG_BUTTONPRESS:
         {
           X11EventKeyPressButtonPress* kb = (X11EventKeyPressButtonPress*)&msg;
-          DebugPrintf("Keypress: %u\n", kb->detail);
+          for (int i = 0;i < __BUTTON_COUNT;++i)
+          {
+            if (kb->event == buttonWnds[i])
+            {
+              buttonActions[i]();
+              running = FALSE;
+            }
+          }
+          DebugPrintf("Buttonpress: %u\n", kb->detail);
           break;
         }
       case (MSG_CLIENT_MESSAGE + 128): // most significant bit set means message sent through SendEvent
