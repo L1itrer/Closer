@@ -17,6 +17,9 @@
 #define global static
 #define internal static
 
+#define FALSE 0
+#define TRUE 1
+
 
 void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -496,6 +499,7 @@ void debug_error_print(X11GenericError err)
 #define MSG_CLIENT_MESSAGE 33
 
 
+#define X11Pad(E) ((4 - (E % 4)) % 4)
 
 
 typedef struct X11Connection{
@@ -629,6 +633,41 @@ X11GC x11_create_gc_basic(X11Window window)
   return req.cid;
 }
 
+typedef struct X11PolyText8Req {
+  u8 opcode;
+  u8 unused;
+  u16 reqLen;
+  u32 drawable;
+  X11GC gc;
+  i16 x, y;
+  // text and padding
+} __attribute__((packed)) X11PolyText8Req;
+
+typedef struct X11TextItem8 {
+  u8 strLen;
+  i8 delta;
+} X11TextItem8;
+
+void x11_poly_text8(X11Window window, X11GC gc, i16 x, i16 y, char* str, u8 strLen)
+{
+  u16 textSize = sizeof(X11TextItem8)+strLen;
+  u16 padLen = X11Pad(textSize);
+  X11PolyText8Req req = {
+    .opcode = 74,
+    .reqLen = 4 + (textSize + padLen) / 4,
+    .drawable = window,
+    .gc = gc,
+    .x = x,
+    .y = y
+  };
+  X11TextItem8 text = {.strLen = strLen};
+  u8 padbytes[4] = {0};
+  send(connfd, (void*)&req, sizeof(req), 0);
+  send(connfd, (void*)&text, sizeof(text), 0);
+  send(connfd, str, (usize)strLen, 0);
+  if (padLen > 0) send(connfd, padbytes, padLen, 0);
+}
+
 
 #define COPY_FROM_PARENT 0
 
@@ -689,7 +728,6 @@ typedef struct X11ChangePropertyReq{
   // bytes follow...
 } __attribute__((packed)) X11ChangePropertyReq;
 
-#define X11Pad(E) ((4 - (E % 4)) % 4)
 
 // taken from https://gitlab.freedesktop.org/xorg/lib/libx11/-/blob/master/src/StName.c
 // @Verify
@@ -1021,9 +1059,9 @@ int main(void)
     1
   );
 
-  X11Atom wmProtocols = x11_intern_atom("WM_PROTOCOLS", 0);
-  wmProtocols = x11_intern_atom("WM_PROTOCOLS", 0);
-  X11Atom deleteWindow = x11_intern_atom("WM_DELETE_WINDOW", 0);
+  X11Atom wmProtocols = x11_intern_atom("WM_PROTOCOLS", FALSE);
+  wmProtocols = x11_intern_atom("WM_PROTOCOLS", FALSE);
+  X11Atom deleteWindow = x11_intern_atom("WM_DELETE_WINDOW", FALSE);
   x11_change_property(
     window,
     wmProtocols,
@@ -1041,6 +1079,7 @@ int main(void)
 
   
   bool32 running = 1;
+  static char mainMsg[] = "Poweroff the device?";
   while (running)
   {
     recv(connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
@@ -1055,6 +1094,7 @@ int main(void)
       case MSG_EXPOSE:
         {
           DebugPrintf("Expose event\n", 0);
+          x11_poly_text8(window, mainGC, 50, 50, mainMsg, sizeof(mainMsg)-1);
           break;
         }
       case MSG_KEYPRESS:
