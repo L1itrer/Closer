@@ -439,6 +439,15 @@ typedef struct X11GenericMessage {
   u8 otherBytes[31];
 } X11GenericMessage;
 
+typedef struct X11EventExpose {
+  u8 code;
+  u8 unused;
+  card16 sequenceNumber;
+  X11Window window;
+  card16 x, y, width, height, count;
+  u8 unused2[14];
+} __attribute__((packed)) X11EventExpose;
+
 // the structure for key press and button press events
 // they both share the exact same layout
 // only keycodes are different
@@ -696,6 +705,7 @@ X11Window x11_create_window(
     .y = y,
     .width = width,
     .height = height,
+    .borderWidth = 1,
     .class = COPY_FROM_PARENT,
     .visual = COPY_FROM_PARENT,
     .bitmask = X11_CW_BACKGROUND_PIXEL | X11_CW_BORDER_PIXEL | X11_CW_EVENT_MASK,
@@ -813,6 +823,23 @@ void x11_map_window(X11Window window)
   send(connfd, (void*)&req, sizeof(X11MapWindowReq), 0);
 }
 
+typedef struct X11MapSubwindowsReq {
+  u8 opcode;
+  u8 unused;
+  u16 reqLen;
+  X11Window window;
+} __attribute__((packed)) X11MapSubwindowsReq;
+
+void x11_map_subwindows(X11Window window)
+{
+  X11MapSubwindowsReq req = {
+    .opcode = 8,
+    .reqLen = 2,
+    .window = window,
+  };
+  send(connfd, (void*)&req, sizeof(req), 0);
+}
+
 typedef struct X11InternAtomReq {
   u8 opcode;
   bool8 onlyIfExists;
@@ -867,6 +894,65 @@ void* alloc(usize size)
   return mem;
 }
 
+
+#define WINDOW_WIDTH 300
+#define WINDOW_HEIGHT 100
+
+
+void action_poweroff(void)
+{
+  PrintCstr("trigger poweroff here\n");
+}
+
+
+void action_reboot(void)
+{
+  PrintCstr("trigger reboot here\n");
+}
+
+
+void action_suspend(void)
+{
+  PrintCstr("trigger suspend here\n");
+}
+
+
+void action_cancel(void)
+{
+  // yes this is supposed to be empty
+}
+
+typedef enum ButtonKind {
+  BUTTON_POWEROFF,
+  BUTTON_REBOOT,
+  BUTTON_SUSPEND,
+  BUTTON_CANCEL,
+  __BUTTON_COUNT,
+}ButtonKind;
+
+#define BUTTON_WIDTH ((WINDOW_WIDTH)/(__BUTTON_COUNT))
+#define BUTTON_HEIGHT ((WINDOW_HEIGHT/2))
+
+void buttons_init(X11Window parentWindow, X11Window buttons[__BUTTON_COUNT])
+{
+  for (int i = 0;i < __BUTTON_COUNT;++i)
+  {
+    buttons[i] = x11_create_window(
+       parentWindow,
+       i * BUTTON_WIDTH,
+       BUTTON_HEIGHT,
+       BUTTON_WIDTH,
+       BUTTON_HEIGHT
+    );
+  }
+}
+
+
+typedef void (*ButtonFuncType)(void);
+
+const char* buttonTexts[] = {"Poweroff", "Reboot", "Suspend", "Cancel"};
+
+const ButtonFuncType buttonActions[] = {action_poweroff, action_reboot, action_suspend, action_cancel};
 
 int main(void)
 {
@@ -993,7 +1079,7 @@ int main(void)
     DebugPrintf("Screens(%d):\n", response.screenCount);
     for (i32 i = 0;i < response.screenCount;++i)
     {
-      DebugPrintf("%u: depthsCount = %d\n", i+1, screens[i].allowedDepthsCount);
+      DebugPrintf("%u: depthsCount = %d, width = %u, height = %u\n", i+1, screens[i].allowedDepthsCount, screens[i].widthInPixels, screens[i].heightInPixels);
 
       // reveice depths info
       X11Depth depth = {0};
@@ -1019,23 +1105,6 @@ int main(void)
       }
     }
   }
-
-#ifdef CLOSER_DEBUG
-  DebugPrintf("\n", 0);
-  struct pollfd pfd = {
-    .fd = fd,
-    .events = POLLIN,
-  };
-  int pollRes = poll(&pfd, 1, 1000);
-  if (pollRes == 0)
-  {
-    DebugPrintf("No more initialization to do\n", 0);
-  }
-  else
-  {
-    DebugPrintf("Still work to do!\n", 0);
-  }
-#endif
   DebugPrintf("Received in total %zu bytes\n", ctr);
   connfd = fd;
 
@@ -1072,10 +1141,24 @@ int main(void)
     1
   );
 
+  X11Window buttonWnds[__BUTTON_COUNT] = {0};
+  X11GC buttonGCs[__BUTTON_COUNT]= {0};
+
+  buttons_init(window, buttonWnds);
+
+  x11_map_window(window);
+
+  for (int i = 0;i < __BUTTON_COUNT;++i)
+  {
+    x11_map_window(buttonWnds[i]);
+  }
 
   X11GC mainGC = x11_create_gc_basic(window);
 
-  x11_map_window(window);
+  for (int i = 0;i < __BUTTON_COUNT;++i)
+  {
+    buttonGCs[i] = x11_create_gc_basic(buttonWnds[i]);
+  }
 
   
   bool32 running = 1;
@@ -1093,8 +1176,19 @@ int main(void)
         }
       case MSG_EXPOSE:
         {
-          DebugPrintf("Expose event\n", 0);
-          x11_poly_text8(window, mainGC, 50, 50, mainMsg, sizeof(mainMsg)-1);
+          X11EventExpose* ev = (void*)&msg;
+          DebugPrintf("Expose event, window = %u\n", ev->window);
+          if (ev->window == window)
+          {
+            x11_poly_text8(window, mainGC, WINDOW_WIDTH/4, WINDOW_HEIGHT/2-30, mainMsg, sizeof(mainMsg)-1);
+          }
+          for (int i = 0;i < __BUTTON_COUNT;++i)
+          {
+            if (ev->window == buttonWnds[i])
+            {
+              x11_poly_text8(buttonWnds[i], buttonGCs[i], 10, WINDOW_HEIGHT/2/2, (char*)buttonTexts[i], strlen(buttonTexts[i]));
+            }
+          }
           break;
         }
       case MSG_KEYPRESS:
