@@ -685,13 +685,14 @@ void x11_poly_text8(X11Window window, X11GC gc, i16 x, i16 y, char* str, u8 strL
 
 #define COPY_FROM_PARENT 0
 
-#define X11_CW_BACKGROUND_PIXEL 0x02
+#define X11_CW_BACKGOUND_PIXMAP (1 << 0)
+#define X11_CW_BACKGROUND_PIXEL (1 << 1)
 #define X11_CW_BORDER_PIXEL 0x08
 #define X11_CW_EVENT_MASK 0x800
 
-#define X11_EV_EXPOSE_MASK (1L << 15)
 #define X11_EV_KEY_PRESS_MASK (1L << 0)
 #define X11_EV_BUTTON_PRESS_MASK (1L << 2)
+#define X11_EV_EXPOSE_MASK (1L << 15)
 
 X11Window x11_create_window(
   X11Window parent,
@@ -914,7 +915,7 @@ void x11_change_window_attributes(X11Window window, u32 bitmask, X11WindowAttrib
     if (bitmask & (1 << i))
     {
       len += 4;
-      values[i] = (u32)(((u32*)attribs)[count]);
+      values[count] = (u32)(((u32*)attribs)[i]);
       count += 1;
     }
   }
@@ -1265,6 +1266,7 @@ int main(void)
   bool32 running = 1;
   u32 selectedIdx;
   static char mainMsg[] = "Poweroff the device?";
+  x11_change_window_attributes(buttonWnds[selectedIdx], valuemask, &selectedAttribs);
   while (running)
   {
     recv(connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
