@@ -1,4 +1,18 @@
 
+__attribute__((naked)) void* syscall0
+(
+  __attribute__((unused)) void* sys_code
+)
+{
+  __asm__ __volatile__
+  (
+    "mov %%rdi, %%rax\n"
+    "syscall\n"
+    "ret\n"
+    :
+    :
+  );
+}
 __attribute__((naked)) void* syscall1
 (
   __attribute__((unused)) void* sys_code,
@@ -112,6 +126,7 @@ __attribute__((naked)) void* syscall6
   );
 }
 
+// defined per architecture as they can be in different places
 #define SYS_READ  0x00
 #define SYS_WRITE 0x01
 #define SYS_CLOSE 0x03
@@ -124,6 +139,9 @@ __attribute__((naked)) void* syscall6
 #define SYS_RECVFROM 0x2d
 #define SYS_SETSOCKOPT 0x36
 #define SYS_GETSOCKOPT 0x37
+#define SYS_FORK 0x39
+#define SYS_EXECVE 0x3b
+#define SYS_EXIT 0x3c
 
 
 

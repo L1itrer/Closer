@@ -10,6 +10,7 @@
 #include <poll.h>
 #include <netinet/in.h>
 #include <sys/un.h>
+#include <sys/types.h>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -172,6 +173,28 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     (void*)(isize)nfds,
     (void*)(isize)timeout
   );
+}
+
+pid_t fork(void)
+{
+  return (int)(isize)syscall0((void*)SYS_FORK);
+}
+
+
+int execve(const char *pathname, char *const argv[], char *const envp[])
+{
+  return (int)(isize)syscall3(
+    (void*)SYS_EXECVE,
+    (void*)pathname,
+    (void*)argv,
+    (void*)envp
+  );
+}
+
+
+void exit(int status)
+{
+  syscall1((void*)SYS_EXIT, (void*)(isize)status);
 }
 
 // clang requires some libc functions
