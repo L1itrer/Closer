@@ -1,4 +1,4 @@
-#/usr/bin/env
+#/usr/bin/env bash
 
 set -xe
 
@@ -9,8 +9,7 @@ fi
 CC="gcc"
 
 for arg in "$@"; do declare $arg='1'; done
-if [ -v release ]; then release=1; fi
-if [ -v clang   ]; then CC="clang"; fi
+if [ -v clang ]; then CC="clang"; fi
 
 CFLAGS="-Wall -Wextra -nostdlib -fno-builtin -fno-unwind-tables"
 DEBUG_FLAGS="-ggdb -DCLOSER_DEBUG=1 -DCLOSER_DISABLE=1"

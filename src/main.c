@@ -571,7 +571,7 @@ int main(int argc, char* argv[], char* env[])
   bool32 res = x11_init_connection(&state);
   if (res != TRUE) return 1;
 
-  x11_list_extensions();
+  //x11_list_extensions();
 
 // APP INITIALIZATION
   i16 middleX = state.screens.data[0].widthInPixels/2;
