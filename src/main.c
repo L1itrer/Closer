@@ -476,6 +476,7 @@ bool32 x11_init_connection(X11State* res)
     PrintCstr("Could not open x11 server\n");
     goto fail;
   }
+  DebugPrintf("Managed to connect to X11 server\n", 0);
 
 
   X11Connection connCookie = {
@@ -487,20 +488,41 @@ bool32 x11_init_connection(X11State* res)
   };
 
   send(fd, &connCookie, sizeof(connCookie), 0);
+
   u8 x11returnCode = 0;
   recv(fd, &x11returnCode, 1, 0);
+
   if (x11returnCode == X11_RESPONSE_SUCCESS)
   {
-    PrintCstr("Established x11 server connection!\n");
+    PrintCstr("X11 Server accepted the connection\n");
+  }
+  else if (x11returnCode == X11_RESPONSE_AUTHENTICATE)
+  {
+    PrintCstr("X11 Server reqires further authentication! (that i'm not doing currently lol)\nReason:\n");
+    X11SetupAuthenticateResponse response = {0};
+    recv(fd, (u8*)(&response)+1, sizeof(response)-1, 0);
+    //u8 buffer[256] = {0};
+    usize extraSize = (usize)(response.extraInfoLen)*4;
+    char* buffer = alloc(extraSize);
+    recv(fd, buffer, extraSize, 0);
+    write(1, buffer, extraSize);
+    PrintCstr("\n");
+    dealloc(buffer);
+    goto fail;
   }
   else
   {
-    PrintCstr("x11 server refused connection!\n");
+    PrintCstr("X11 server refused connection!\nReason:\n");
+    X11SetupFailedResponse response = {0};
+    recv(fd, (u8*)(&response)+1, sizeof(response)-1, 0);
+    char buffer[512] = {0};
+    recv(fd, buffer, (usize)response.responseLen*4, 0);
+    write(1, buffer, response.reasonLen);
+    PrintCstr("\n");
     goto fail;
   }
 
-
-  recv(fd, &res->response, sizeof(res->response), 0);
+  recv(fd, (u8*)(&res->response)+1, sizeof(res->response)-1, 0);
 
   DebugPrintf("id base: %x, mask: %x\n", res->response.resourceIdBase, res->response.resourceIdMask);
   g_idBase = res->response.resourceIdBase;
@@ -609,6 +631,8 @@ int main(int argc, char* argv[], char* env[])
   Unused(argc);
   Unused(argv);
   g_envp = env;
+  char* otr = alloc(2137);
+  dealloc(otr);
 
   X11State state = {0};
   bool32 res = x11_init_connection(&state);

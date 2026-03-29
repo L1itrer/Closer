@@ -167,7 +167,7 @@ typedef struct X11Connection{
 } __attribute__((packed)) X11Connection;
 
 typedef struct X11SetupSuccessResponse {
-  // u8 code; // NOTE: only not in the struct because i read it first
+  u8 code; // NOTE: only not in the struct because i read it first
   u8  unused;
   card16 protocolMajorVersion;
   card16 protocolMinorVersion;
@@ -191,6 +191,20 @@ typedef struct X11SetupSuccessResponse {
   // *formats;
   // *screens;
 } __attribute__((packed)) X11SetupSuccessResponse;
+
+typedef struct X11SetupAuthenticateResponse {
+  u8 code;
+  u8 unused[5];
+  u16 extraInfoLen;
+} __attribute__((packed)) X11SetupAuthenticateResponse;
+
+typedef struct X11SetupFailedResponse {
+  u8 code;
+  u8 reasonLen;
+  card16 protocolMajorVersion;
+  card16 protocolMinorVersion;
+  u16 responseLen;
+} __attribute__((packed)) X11SetupFailedResponse;
 
 typedef struct X11Format {
   card8 depth, bitsPerLine, scanlinePad;
@@ -288,6 +302,7 @@ typedef struct X11WindowAttributes {
 /********** REQUESTS **********/
 
 #define X11_RESPONSE_SUCCESS 1
+#define X11_RESPONSE_AUTHENTICATE 2
 #define X11_CW_VALUES_COUNT 3
 
 typedef struct X11CreateWindowReq{
