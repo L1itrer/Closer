@@ -40,9 +40,10 @@ typedef struct StringView {
   usize len;
 } StringView;
 
+#define Trap() __builtin_trap()
 
 #define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
-#if BUILD_DEBUG
+#if CLOSER_DEBUG
 # define Assert(x) AssertAlways(x)
 #else
 # define Assert(x) (void)(x)

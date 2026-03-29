@@ -1,7 +1,6 @@
 /*
  * TODO:
  * - extend x11_create_window
- * - introduce memory arenas and extract the x11 initalization
  * - read display from env
  * - try connecting to a port if file not exists
  * - read available x11 extensions
@@ -11,6 +10,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <poll.h>
@@ -308,7 +308,7 @@ void* alloc(usize size)
     -1,
     0
   );
-  if (mem == MAP_FAILED) mem = NULL;
+  if (mem == MAP_FAILED) return NULL;
   usize* memusize = (usize*)mem;
   memusize[0] = size;
   return memusize+1;
@@ -407,15 +407,69 @@ const char* buttonTexts[] = {"Poweroff", "Reboot", "Suspend", "Cancel"};
 
 const ButtonFuncType buttonActions[] = {action_poweroff, action_reboot, action_suspend, action_cancel};
 
+
+i32 sv_cmp(StringView str1, StringView str2)
+{
+  if (str1.len != str2.len) return (i32)((i32)str1.len - (i32)str2.len);
+  for (usize i = 0;i < str1.len;++i)
+  {
+    if (str1.data[i] != str2.data[i])
+      return str1.data[i] - str2.data[i];
+  }
+  return 0;
+}
+
+#define SvCmpCstr(sv, cstr) sv_cmp(sv, (StringView){.data=cstr,.len=sizeof(cstr)-1})
+
+StringView envp_get_display(void)
+{
+  StringView res = {0};
+  i32 i = 0;
+  char* currEnvVar = g_envp[i];
+  while (currEnvVar != NULL)
+  {
+    currEnvVar = g_envp[i];
+    char* currEnvVarLetter = currEnvVar;
+    StringView envVarName = {.data = currEnvVar};
+    while (currEnvVarLetter[0] != '=')
+    {
+      currEnvVarLetter += 1;
+      envVarName.len += 1;
+    }
+    if (SvCmpCstr(envVarName, "DISPLAY") == 0)
+    {
+      currEnvVarLetter += 1;
+      res.data = currEnvVarLetter;
+      while (currEnvVarLetter[0] != '\0')
+      {
+        currEnvVarLetter += 1;
+        res.len += 1;
+      }
+      break;
+    }
+    i += 1;
+  }
+  return res;
+}
+
+
 bool32 x11_init_connection(X11State* res)
 {
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
+  StringView displayVar = envp_get_display();
+  Assert(displayVar.data[0] == ':');
+  Assert(displayVar.len > 0);
+  DebugPrintf("Display var: %.*s\n", displayVar.len, displayVar.data);
+  displayVar.data += 1;
+  displayVar.len  -= 1;
 
   struct sockaddr_un addr = {0};
   addr.sun_family = AF_UNIX;
-  static const char x11path[] = "/tmp/.X11-unix/X0"; // TODO: get display from env
+  static const char x11path[] = "/tmp/.X11-unix/X";
   memcpy(addr.sun_path, x11path, sizeof(x11path));
+  memcpy(addr.sun_path+sizeof(x11path)-1, displayVar.data, displayVar.len);
+  DebugPrintf("x11 path: %s\n", addr.sun_path);
 
   if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1)
   {
@@ -493,7 +547,6 @@ bool32 x11_init_connection(X11State* res)
   // init x11
   // you could just recv everything at once
   // recv(fd, mem, (usize)response.extraDataLengthIn4Bytes * 4ULL, 0);
-  DebugPrintf("receiving extars\n", 0);
 
   if (vendorLenAligned > 0)
   {
@@ -509,24 +562,14 @@ bool32 x11_init_connection(X11State* res)
   }
   res->formats.data = formats;
 
-  DebugPrintf("Formats(%u):\n", res->response.pixmapFormatsCount);
-  for (usize i = 0;i < res->response.pixmapFormatsCount;++i)
-  {
-    DebugPrintf("%zu: depth = %d, bitsPerLine = %d, scanLinePad = %d\n", i+1, formats[i].depth, formats[i].bitsPerLine, formats[i].scanlinePad);
-  }
-
-
   // screens
   for (usize i = 0;i < res->response.screenCount;++i)
   {
     X11Screen screen = {0};
     recv(fd, (void*)&screen, sizeof(screen), 0);
     screens[i] = screen;
-    DebugPrintf("Screens(%d):\n", res->response.screenCount);
     for (i32 i = 0;i < res->response.screenCount;++i)
     {
-      DebugPrintf("%u: depthsCount = %d, width = %u, height = %u\n", i+1, screens[i].allowedDepthsCount, screens[i].widthInPixels, screens[i].heightInPixels);
-
       // reveice depths info
       X11Depth depth = {0};
       for (i8 j = 0;j < screens[i].allowedDepthsCount;++j)
