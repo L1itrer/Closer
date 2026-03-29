@@ -6,6 +6,15 @@ if [[ ! -d ./build ]]; then
   mkdir ./build
 fi
 
-CFLAGS="-Wall -Wextra -ggdb -DCLOSER_DEBUG=1 -DCLOSER_DISABLE=1 -nostdlib -fno-builtin -fno-unwind-tables"
+CC="gcc"
 
-clang $CFLAGS ./src/main.c -o ./build/closer
+for arg in "$@"; do declare $arg='1'; done
+if [ -v release ]; then release=1; fi
+if [ -v clang   ]; then CC="clang"; fi
+
+CFLAGS="-Wall -Wextra -nostdlib -fno-builtin -fno-unwind-tables"
+DEBUG_FLAGS="-ggdb -DCLOSER_DEBUG=1 -DCLOSER_DISABLE=1"
+RELEASE_FLAGS="-O2"
+
+if [ -v release ]; then $CC $RELEASE_FLAGS $CFLAGS ./src/main.c -o ./build/closer; fi
+if [ ! -v release ]; then $CC $DEBUG_FLAGS $CFLAGS ./src/main.c -o ./build/closer; fi
