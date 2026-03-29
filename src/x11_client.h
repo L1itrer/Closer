@@ -1,5 +1,6 @@
 #ifndef X11_CLIENT_H
 #define X11_CLIENT_H
+#include "closer.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -234,6 +235,25 @@ typedef struct X11VisualType {
   i32 blueMask;
   u32 unused;
 } __attribute__((packed)) X11VisualType;
+
+typedef struct X11Screens {
+  X11Screen* data;
+  usize len;
+} X11Screens;
+
+
+typedef struct X11Formats {
+  X11Format* data;
+  usize len;
+} X11Formats;
+
+typedef struct X11State {
+  int connfd;
+  X11SetupSuccessResponse response;
+  X11Screens screens;
+  X11Formats formats;
+  StringView vendorInfo;
+} X11State;
 
 typedef struct X11WindowAttributes {
     X11Pixmap backgroundPixmap;	/* background or None or ParentRelative */

@@ -35,4 +35,9 @@ typedef i32 bool32;
 #define FALSE 0
 #define TRUE 1
 
+typedef struct StringView {
+  char* data;
+  usize len;
+} StringView;
+
 #endif

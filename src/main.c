@@ -58,14 +58,18 @@ const char* x11_error_strs[] = {
 
 void debug_error_print(X11GenericError err)
 {
+  #ifndef CLOSER_DEBUG
+  Unused(err);
+  #endif
   DebugPrintf("error(%u): %s!\n", err.code, x11_error_strs[err.code]);
 }
 
-global X11Screen screen;
-global int connfd;
-global u32 idBase;
-global u32 idCtr;
-global u32 idMask;
+global X11Screen g_screen;
+global int g_connfd;
+global u32 g_idBase;
+global u32 g_idCtr;
+global u32 g_idMask;
+global char** g_envp;
 
 
 X11GC x11_create_gc_basic(X11Window window)
@@ -73,11 +77,11 @@ X11GC x11_create_gc_basic(X11Window window)
   X11CreateGCReq req = {
     .opcode = 55,
     .reqLen = 4, // no extra values
-    .cid = idCtr,
+    .cid = g_idCtr,
     .drawable = window,
   };
-  idCtr++;
-  send(connfd, (void*)&req, sizeof(req), 0);
+  g_idCtr++;
+  send(g_connfd, (void*)&req, sizeof(req), 0);
   return req.cid;
 }
 
@@ -95,10 +99,10 @@ void x11_poly_text8(X11Window window, X11GC gc, i16 x, i16 y, char* str, u8 strL
   };
   X11TextItem8 text = {.strLen = strLen};
   u8 padbytes[4] = {0};
-  send(connfd, (void*)&req, sizeof(req), 0);
-  send(connfd, (void*)&text, sizeof(text), 0);
-  send(connfd, str, (usize)strLen, 0);
-  if (padLen > 0) send(connfd, padbytes, padLen, 0);
+  send(g_connfd, (void*)&req, sizeof(req), 0);
+  send(g_connfd, (void*)&text, sizeof(text), 0);
+  send(g_connfd, str, (usize)strLen, 0);
+  if (padLen > 0) send(g_connfd, padbytes, padLen, 0);
 }
 
 X11Window x11_create_window(
@@ -112,7 +116,7 @@ X11Window x11_create_window(
     .opcode = 1,
     .depth = 0,
     .requestLength = 8 + X11_CW_VALUES_COUNT, // @Hardcode
-    .windowId = idCtr,
+    .windowId = g_idCtr,
     .parent = parent,
     .x = x,
     .y = y,
@@ -123,14 +127,14 @@ X11Window x11_create_window(
     .visual = COPY_FROM_PARENT,
     .bitmask = X11_CW_BACKGROUND_PIXEL | X11_CW_BORDER_PIXEL | X11_CW_EVENT_MASK,
     .values = { // @Hardcode
-      screen.whitePixel,
-      screen.blackPixel,
+      g_screen.whitePixel,
+      g_screen.blackPixel,
       X11_EV_KEY_PRESS_MASK | X11_EV_EXPOSE_MASK | X11_EV_BUTTON_PRESS_MASK
     }
   };
-  send(connfd, (void*)&req, sizeof(req), 0);
-  result = idCtr;
-  idCtr += 1;
+  send(g_connfd, (void*)&req, sizeof(req), 0);
+  result = g_idCtr;
+  g_idCtr += 1;
   return result;
 }
 
@@ -157,12 +161,12 @@ void x11_change_property(
     .format = format,
     .formatLen = elementCount,
   };
-  send(connfd, (void*)&req, sizeof(req), 0);
-  send(connfd, data, size, 0);
+  send(g_connfd, (void*)&req, sizeof(req), 0);
+  send(g_connfd, data, size, 0);
   char paddingbytes[4] = {0};
   if (pad > 0)
   {
-    send(connfd, paddingbytes, pad, 0);
+    send(g_connfd, paddingbytes, pad, 0);
   }
 }
 
@@ -186,7 +190,7 @@ void x11_map_window(X11Window window)
     .requestLen = sizeof(X11MapWindowReq)/4,
     .window = window
   };
-  send(connfd, (void*)&req, sizeof(X11MapWindowReq), 0);
+  send(g_connfd, (void*)&req, sizeof(X11MapWindowReq), 0);
 }
 
 void x11_map_subwindows(X11Window window)
@@ -196,7 +200,7 @@ void x11_map_subwindows(X11Window window)
     .reqLen = 2,
     .window = window,
   };
-  send(connfd, (void*)&req, sizeof(req), 0);
+  send(g_connfd, (void*)&req, sizeof(req), 0);
 }
 
 void x11_clear_area(X11Window window, i16 x, i16 y, u16 width, u16 height, bool8 exposures)
@@ -211,7 +215,7 @@ void x11_clear_area(X11Window window, i16 x, i16 y, u16 width, u16 height, bool8
     .width = width,
     .height = height,
   };
-  send(connfd, (void*)&req, sizeof(req), 0);
+  send(g_connfd, (void*)&req, sizeof(req), 0);
 }
 
 void x11_clear_window(X11Window window, bool8 exposures)
@@ -240,7 +244,7 @@ void x11_change_window_attributes(X11Window window, u32 bitmask, X11WindowAttrib
   req->reqLen = len/4;
   req->window = window;
   req->bitmask = bitmask;
-  send(connfd, (void*)memory, len, 0);
+  send(g_connfd, (void*)memory, len, 0);
 }
 
 internal X11Atom x11_intern_atom(const char* name, bool8 onlyIfExists)
@@ -254,12 +258,12 @@ internal X11Atom x11_intern_atom(const char* name, bool8 onlyIfExists)
     .nameLen = nameLen,
   };
   char padbytes[4] = {0};
-  send(connfd, (void*)&req, sizeof(req), 0);
-  send(connfd, name, nameLen, 0);
-  if (padLen > 0) send(connfd, padbytes, padLen, 0);
+  send(g_connfd, (void*)&req, sizeof(req), 0);
+  send(g_connfd, name, nameLen, 0);
+  if (padLen > 0) send(g_connfd, padbytes, padLen, 0);
   
   X11InternAtomReply reply = {0};
-  recv(connfd, (void*)&reply, sizeof(reply), 0);
+  recv(g_connfd, (void*)&reply, sizeof(reply), 0);
   return reply.atom;
 }
 
@@ -268,37 +272,78 @@ void* alloc(usize size)
 {
   void* mem = mmap(
     NULL,
-    size,
+    size+(sizeof(usize)),
     PROT_WRITE | PROT_READ,
     MAP_PRIVATE | MAP_ANONYMOUS,
     -1,
     0
   );
   if (mem == MAP_FAILED) mem = NULL;
-  return mem;
+  usize* memusize = (usize*)mem;
+  memusize[0] = size;
+  return memusize+1;
+}
+
+int dealloc(void* ptr)
+{
+  usize* memusize = (usize*)ptr;
+  memusize -= 1;
+  usize memSize = memusize[0];
+  return munmap((void*)memusize, memSize);
 }
 
 #define WINDOW_WIDTH 300
 #define WINDOW_HEIGHT 100
 
+void trigger_command(char* const command)
+{
+  pid_t p = fork();
+  char* const argv[] = {
+    "/usr/bin/systemctl",
+    command,
+    NULL
+  };
+  if (p == 0)
+  {
+    int ret = execve("/usr/bin/systemctl", argv, g_envp);
+    if (ret == -1) 
+    {
+      PrintCstr("execve() failed\n");
+      exit(1);
+    }
+  }
+}
+
 void action_poweroff(void)
 {
+#ifdef CLOSER_DISABLE
   PrintCstr("trigger poweroff here\n");
+#else
+  trigger_command("poweroff");
+#endif
 }
 
 void action_reboot(void)
 {
+#ifdef CLOSER_DISABLE
   PrintCstr("trigger reboot here\n");
+#else
+  trigger_command("reboot");
+#endif
 }
 
 void action_suspend(void)
 {
+#ifdef CLOSER_DISABLE
   PrintCstr("trigger suspend here\n");
+#else
+  trigger_command("suspend");
+#endif
 }
 
 void action_cancel(void)
 {
-  // yes this is supposed to be empty
+  PrintCstr("cancelled\n");
 }
 
 typedef enum ButtonKind {
@@ -332,24 +377,10 @@ const char* buttonTexts[] = {"Poweroff", "Reboot", "Suspend", "Cancel"};
 
 const ButtonFuncType buttonActions[] = {action_poweroff, action_reboot, action_suspend, action_cancel};
 
-int main(int argc, char* argv[], char* env[])
+bool32 x11_init_connection(X11State* res)
 {
-  Unused(argc);
-  Unused(argv);
-  Unused(env);
-  int programResult = 0;
-  
   int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  int availableSocketBytes = 0;
-  unsigned int optLen = 0;
 
-  int res = getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &availableSocketBytes, &optLen);
-  if (res != 0)
-  {
-    PrintCstr("Could not set the bytes availability!\n");
-    programResult = 1;
-    goto end;
-  }
 
   struct sockaddr_un addr = {0};
   addr.sun_family = AF_UNIX;
@@ -359,11 +390,10 @@ int main(int argc, char* argv[], char* env[])
   if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1)
   {
     PrintCstr("Could not open x11 server\n");
-    programResult = 1;
-    goto end;
+    goto fail;
   }
 
-  // X11 connection initialization
+
   X11Connection connCookie = {
     .byteOrder = X11_LITTLE_ENDIAN,
     .protocolMajorVersion = 11,
@@ -382,83 +412,88 @@ int main(int argc, char* argv[], char* env[])
   else
   {
     PrintCstr("x11 server refused connection!\n");
-    programResult = 1;
-    goto end;
+    goto fail;
   }
-  X11SetupSuccessResponse response = {0};
-  recv(fd, &response, sizeof(response), 0);
 
-  DebugPrintf("id base: %x, mask: %x\n", response.resourceIdBase, response.resourceIdMask);
-  idBase = response.resourceIdBase;
-  idCtr = idBase;
-  idMask = response.resourceIdMask;
-  usize ctr = 0;
 
-  DebugPrintf("screens count: %d\n", response.screenCount);
-  DebugPrintf("formats count: %u\n", response.pixmapFormatsCount);
-  DebugPrintf("vendor length: %u\n", response.vendorLength);
-  DebugPrintf("extra info len: %d\n", 4 * (int)response.extraDataLengthIn4Bytes);
+  recv(fd, &res->response, sizeof(res->response), 0);
+
+  DebugPrintf("id base: %x, mask: %x\n", res->response.resourceIdBase, res->response.resourceIdMask);
+  g_idBase = res->response.resourceIdBase;
+  g_idCtr = g_idBase;
+  g_idMask = res->response.resourceIdMask;
+
+  DebugPrintf("screens count: %d\n", res->response.screenCount);
+  DebugPrintf("formats count: %u\n", res->response.pixmapFormatsCount);
+  DebugPrintf("vendor length: %u\n", res->response.vendorLength);
+  DebugPrintf("extra info len: %d\n", 4 * (int)res->response.extraDataLengthIn4Bytes);
+
 
   // align to nearest multiple of 4
-  usize vendorLenAligned = (response.vendorLength+3) & ~0x03;
+  usize vendorLenAligned = (res->response.vendorLength+3) & ~0x03;
 
-  usize screensSize = response.screenCount * sizeof(X11Screen);
-  usize formatsSize = response.pixmapFormatsCount * sizeof(X11Format);
-  usize extrasSize  = (usize)response.extraDataLengthIn4Bytes * 4;
+  res->screens.len = res->response.screenCount;
+  res->formats.len = res->response.pixmapFormatsCount;
+  res->vendorInfo.len = res->response.vendorLength;
+
+
+  // X11 connection initialization
+  //usize screensSize = res->response.screenCount * sizeof(X11Screen);
+  usize formatsSize = res->response.pixmapFormatsCount * sizeof(X11Format);
+  usize extrasSize  = (usize)res->response.extraDataLengthIn4Bytes * 4;
 
   usize memLen = (usize)(
-    (isize)screensSize +
-    (isize)formatsSize +
-    (isize)vendorLenAligned +
-    (isize)extrasSize // @Cleanup no need to include this
+    //(isize)screensSize +
+    //(isize)formatsSize +
+    //(isize)vendorLenAligned +
+    (isize)extrasSize
   );
   DebugPrintf("bytes to alloc = %zu\n", memLen);
   void* mem = alloc(memLen);
   if (mem == NULL)
   {
     PrintCstr("Failed to map memory\n");
-    goto end;
+    goto fail;
   }
   char* vendor = mem;
   X11Format* formats = (void*)((char*)mem + vendorLenAligned);
-  X11Screen* screens = (void*)(formats + response.pixmapFormatsCount);
+  X11Screen* screens = (void*)(formats + res->response.pixmapFormatsCount);
 
-  DebugPrintf("receiving extars\n", 0);
-  //
   // NOTE: extraDataLength specifies ALL the memory necessery to
   // init x11
   // you could just recv everything at once
-  //recv(fd, mem, (usize)response.extraDataLengthIn4Bytes * 4ULL, 0);
-  //goto poll;
-  
-  // receive vendor info
+  // recv(fd, mem, (usize)response.extraDataLengthIn4Bytes * 4ULL, 0);
+  DebugPrintf("receiving extars\n", 0);
+
   if (vendorLenAligned > 0)
   {
     recv(fd, vendor, vendorLenAligned, 0);
-    ctr += vendorLenAligned;
   }
   DebugPrintf("vendor: %.*s\n", vendorLenAligned, vendor);
+  res->vendorInfo.data = vendor;
 
   // receive format infos
-  if (response.pixmapFormatsCount > 0)
+  if (res->response.pixmapFormatsCount > 0)
   {
     recv(fd, formats, formatsSize, 0);
-    ctr += formatsSize;
   }
+  res->formats.data = formats;
 
-  DebugPrintf("Formats(%u):\n", response.pixmapFormatsCount);
-  for (usize i = 0;i < response.pixmapFormatsCount;++i)
+  DebugPrintf("Formats(%u):\n", res->response.pixmapFormatsCount);
+  for (usize i = 0;i < res->response.pixmapFormatsCount;++i)
   {
     DebugPrintf("%zu: depth = %d, bitsPerLine = %d, scanLinePad = %d\n", i+1, formats[i].depth, formats[i].bitsPerLine, formats[i].scanlinePad);
   }
 
-  // receive screens info
+
+  // screens
+  for (usize i = 0;i < res->response.screenCount;++i)
   {
-    recv(fd, screens, screensSize, 0);
-    ctr += screensSize;
-    screen = screens[0];
-    DebugPrintf("Screens(%d):\n", response.screenCount);
-    for (i32 i = 0;i < response.screenCount;++i)
+    X11Screen screen = {0};
+    recv(fd, (void*)&screen, sizeof(screen), 0);
+    screens[i] = screen;
+    DebugPrintf("Screens(%d):\n", res->response.screenCount);
+    for (i32 i = 0;i < res->response.screenCount;++i)
     {
       DebugPrintf("%u: depthsCount = %d, width = %u, height = %u\n", i+1, screens[i].allowedDepthsCount, screens[i].widthInPixels, screens[i].heightInPixels);
 
@@ -467,7 +502,6 @@ int main(int argc, char* argv[], char* env[])
       for (i8 j = 0;j < screens[i].allowedDepthsCount;++j)
       {
         recv(fd, &depth, sizeof(X11Depth), 0);
-        ctr += sizeof(X11Depth);
         //DebugPrintf("--depth%d: visual = %u\n", j+1, depth.numberOfVisuals);
         usize visualTypesSize = sizeof(X11VisualType) * (usize)depth.numberOfVisuals;
 
@@ -475,23 +509,41 @@ int main(int argc, char* argv[], char* env[])
         {
           X11VisualType* visualTypes = alloc(visualTypesSize);
           recv(fd, visualTypes, visualTypesSize, 0);
-          ctr += visualTypesSize;
           //for (u16 k = 0;k < depth.numberOfVisuals;++k)
           //{
           //  X11VisualType* v = &visualTypes[k];
           //  //DebugPrintf("----visual%u: bits = %d, red = %x, green = %x, blue = %x\n", k, v->bitsPerRgbValue, v->redMask, v->greenMask, v->blueMask);
           //}
-          munmap(visualTypes, visualTypesSize);
+          dealloc(visualTypes);
         }
       }
     }
   }
-  DebugPrintf("Received in total %zu bytes\n", ctr);
-  connfd = fd;
+  res->screens.data = screens;
+  g_screen = screens[0];
+
+
+  res->connfd = g_connfd = fd;
+
+  return TRUE;
+fail:
+  close(fd);
+  return FALSE;
+}
+
+int main(int argc, char* argv[], char* env[])
+{
+  Unused(argc);
+  Unused(argv);
+  g_envp = env;
+
+  X11State state = {0};
+  bool32 res = x11_init_connection(&state);
+  if (res != TRUE) return 1;
 
 // APP INITIALIZATION
   X11GenericMessage msg = {0};
-  X11Window window = x11_create_window(screen.rootWindow, 100, 100, 300, 100);
+  X11Window window = x11_create_window(g_screen.rootWindow, 100, 100, 300, 100);
 
   char mainWindowName[] = "Closer";
   x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
@@ -544,7 +596,7 @@ int main(int argc, char* argv[], char* env[])
   u32 valuemask = X11_CW_BACKGROUND_PIXEL;// | X11_CW_BORDER_PIXEL | X11_CW_EVENT_MASK;
 
   X11WindowAttributes defAttribs = {
-    .backgroundPixel = screen.whitePixel,
+    .backgroundPixel = g_screen.whitePixel,
   };
 
   X11WindowAttributes selectedAttribs = {
@@ -557,7 +609,7 @@ int main(int argc, char* argv[], char* env[])
   x11_change_window_attributes(buttonWnds[selectedIdx], valuemask, &selectedAttribs);
   while (running)
   {
-    recv(connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
+    recv(g_connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
     switch (msg.code)
     {
       case MSG_ERROR:
@@ -637,10 +689,5 @@ int main(int argc, char* argv[], char* env[])
         }
     }
   }
-
-//mem_unmap:
-  munmap(mem, memLen);
-end:
-  close(fd);
-  return programResult;
+  return 0;
 }
