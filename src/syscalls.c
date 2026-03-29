@@ -44,11 +44,11 @@ void *mmap(void* addr, size_t length, int prot, int flags, int fd, off_t offset)
   return syscall6(
     (void*)SYS_MMAP,
     (void*)addr,
-    (void*)length,
+    (void*)(isize)length,
     (void*)(isize)prot,
     (void*)(isize)flags,
     (void*)(isize)fd,
-    (void*)offset
+    (void*)(isize)offset
   );
 }
 int munmap(void* addr, size_t length)

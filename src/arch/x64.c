@@ -117,7 +117,7 @@ __attribute__((naked)) void* syscall6
     "mov %%rcx, %%rdx\n"
     "mov %%r8 , %%r10\n"
     "mov %%r9 , %%r8\n"
-    "mov 16(%%rsp), %%r9\n"
+    "mov 8(%%rsp), %%r9\n"
     "syscall\n"
     "ret\n"
     :
