@@ -84,6 +84,40 @@ X11GC x11_create_gc_basic(X11Window window)
   return req.cid;
 }
 
+void x11_list_fonts(const char* pattern)
+{
+  usize patternLen = strlen(pattern);
+  usize pad = X11Pad(patternLen);
+  X11ListFontsReq req = {
+    .opcode = 49,
+    .reqLen = 2+((u16)patternLen + (u16)pad)/4,
+    .maxNames = 0xfffe,
+    .patternLen = patternLen
+  };
+  send(g_connfd, (void*)&req, sizeof(req), 0);
+  send(g_connfd, pattern, patternLen, 0);
+  u8 padbytes[4] = {0};
+  if (pad > 0) send(g_connfd, padbytes, pad, 0);
+
+  X11ListFontsReply reply = {0};
+  recv(g_connfd, &reply, sizeof(reply), 0);
+
+  usize bytesCount = 0;
+  DebugPrintf("font names count: %u\n", reply.fontNamesCount);
+  for (u16 i = 0;i < reply.fontNamesCount;++i)
+  {
+    u8 len = 0;
+    char name[256] = {0};
+    recv(g_connfd, &len, 1, 0);
+    recv(g_connfd, name, len, 0);
+    write(1, name, len);
+    PrintCstr("\n");
+    bytesCount += 1+(usize)len;
+  }
+  pad = X11Pad(bytesCount);
+  if (pad > 0) recv(g_connfd, padbytes, pad, 0);
+}
+
 void x11_poly_text8(X11Window window, X11GC gc, i16 x, i16 y, char* str, u8 strLen)
 {
   u16 textSize = sizeof(X11TextItem8)+strLen;
@@ -172,7 +206,7 @@ void x11_change_property(
 
 void x11_window_set_min_size(X11Window window, u32 minWidth, u32 minHeight)
 {
-  u32 hints[18];
+  u32 hints[18] = {0};
   hints[0] = (1 << 4);
   hints[5] = minWidth;
   hints[6] = minHeight;
@@ -657,7 +691,8 @@ int main(int argc, char* argv[], char* env[])
   bool32 res = x11_init_connection(&state);
   if (res != TRUE) return 1;
 
-  x11_list_extensions();
+  //x11_list_extensions();
+  //x11_list_fonts("*");
 
 // APP INITIALIZATION
   i16 middleX = state.screens.data[0].widthInPixels/2;

@@ -409,6 +409,23 @@ typedef struct X11InternAtomReply {
   u8 unused2[20];
 } __attribute__((packed))  X11InternAtomReply;
 
+typedef struct X11ListFontsReq {
+  u8 opcode;
+  u8 unused;
+  u16 reqLen;
+  card16 maxNames;
+  u16 patternLen;
+} __attribute__((packed)) X11ListFontsReq;
+
+typedef struct X11ListFontsReply {
+  u8 reply;
+  u8 unused;
+  card16 sequenceNumber;
+  u32 replyLen;
+  card16 fontNamesCount;
+  u8 unused2[22];
+} __attribute__((packed)) X11ListFontsReply;
+
 
 typedef struct X11PolyText8Req {
   u8 opcode;
