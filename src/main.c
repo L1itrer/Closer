@@ -574,8 +574,13 @@ int main(int argc, char* argv[], char* env[])
   x11_list_extensions();
 
 // APP INITIALIZATION
-  X11GenericMessage msg = {0};
-  X11Window window = x11_create_window(g_screen.rootWindow, 100, 100, 300, 100);
+  i16 middleX = state.screens.data[0].widthInPixels/2;
+  i16 middleY = state.screens.data[0].heightInPixels/2;
+  i16 windowWidth = WINDOW_WIDTH;
+  i16 windowHeight = WINDOW_HEIGHT;
+  i16 windowX = middleX - (windowWidth/2);
+  i16 windowY = middleY - (windowHeight/2);
+  X11Window window = x11_create_window(g_screen.rootWindow, windowX, windowY, windowWidth, windowHeight);
 
   char mainWindowName[] = "Closer";
   x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
@@ -639,6 +644,9 @@ int main(int argc, char* argv[], char* env[])
   u32 selectedIdx = 0;
   static char mainMsg[] = "Poweroff the device?";
   x11_change_window_attributes(buttonWnds[selectedIdx], valuemask, &selectedAttribs);
+
+
+  X11GenericMessage msg = {0};
   while (running)
   {
     recv(g_connfd, (void*)&msg, sizeof(X11GenericMessage), 0);
