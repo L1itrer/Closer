@@ -267,6 +267,36 @@ internal X11Atom x11_intern_atom(const char* name, bool8 onlyIfExists)
   return reply.atom;
 }
 
+internal void x11_list_extensions(void)
+{
+  // if i wanted to make this a usable fuction
+  // it would return a list of strings allocated in an arena or
+  // something
+  // but i just wanna print them
+  X11ListExtensionsReq req = {
+    .code = 99,
+    .reqLen = 1
+  };
+  X11ListExtensionsReply reply = {0};
+  send(g_connfd, (void*)&req, sizeof(req), 0);
+  recv(g_connfd, (void*)&reply, sizeof(reply), 0);
+  PrintCstr("Available extensions:\n");
+  usize n = 0;
+  for (card8 i = 0;i < reply.strsCount;++i)
+  {
+    u8 len = 0;
+    char bytes[256] = {0};
+    recv(g_connfd, (void*)&len, 1, 0);
+    recv(g_connfd, bytes, (usize)len, 0);
+    write(1, bytes, (usize)len);
+    write(1, "\n", 1);
+    n += 1+(usize)len;
+  }
+  usize pad = X11Pad(n);
+  u8 padbytes[4] = {0};
+  if (pad > 0) recv(g_connfd, padbytes, pad, 0);
+}
+
 
 void* alloc(usize size)
 {
@@ -540,6 +570,8 @@ int main(int argc, char* argv[], char* env[])
   X11State state = {0};
   bool32 res = x11_init_connection(&state);
   if (res != TRUE) return 1;
+
+  x11_list_extensions();
 
 // APP INITIALIZATION
   X11GenericMessage msg = {0};

@@ -409,4 +409,17 @@ typedef struct X11TextItem8 {
   i8 delta;
 } X11TextItem8;
 
+typedef struct X11ListExtensionsReq {
+  u8 code, unused;
+  u16 reqLen;
+} __attribute__((packed)) X11ListExtensionsReq;
+
+typedef struct X11ListExtensionsReply {
+  u8 reply;
+  card8 strsCount;
+  card16 sequenceNumber;
+  u32 replyLen;
+  u8 unused[24];
+} __attribute__((packed)) X11ListExtensionsReply;
+
 #endif // X11_CLIENT_H

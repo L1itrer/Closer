@@ -40,4 +40,12 @@ typedef struct StringView {
   usize len;
 } StringView;
 
+
+#define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
+#if BUILD_DEBUG
+# define Assert(x) AssertAlways(x)
+#else
+# define Assert(x) (void)(x)
+#endif
+
 #endif
