@@ -1,12 +1,11 @@
 /*
  * TODO:
  * - extend x11_create_window
- * - read display from env
  * - try connecting to a port if file not exists
- * - read available x11 extensions
  * - draw custom strings
  * - improve the ui
  */
+#include <X11/Xatom.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -168,6 +167,26 @@ void x11_change_property(
   {
     send(g_connfd, paddingbytes, pad, 0);
   }
+}
+
+
+void x11_window_set_min_size(X11Window window, u32 minWidth, u32 minHeight)
+{
+  u32 hints[18];
+  hints[0] = (1 << 4);
+  hints[5] = minWidth;
+  hints[6] = minHeight;
+
+
+  x11_change_property(
+    window,
+    X11A_WM_NORMAL_HINTS,
+    X11A_WM_SIZE_HINTS,
+    32,
+    X11_CHGP_REPLACE,
+    (void*)hints,
+    18
+  );
 }
 
 void x11_window_set_name(X11Window window, char* name, u16 nameLen)
@@ -638,7 +657,7 @@ int main(int argc, char* argv[], char* env[])
   bool32 res = x11_init_connection(&state);
   if (res != TRUE) return 1;
 
-  //x11_list_extensions();
+  x11_list_extensions();
 
 // APP INITIALIZATION
   i16 middleX = state.screens.data[0].widthInPixels/2;
@@ -677,6 +696,9 @@ int main(int argc, char* argv[], char* env[])
     (u8*)&deleteWindow,
     1
   );
+
+
+  x11_window_set_min_size(window, WINDOW_WIDTH, WINDOW_HEIGHT);
 
   X11Window buttonWnds[__BUTTON_COUNT] = {0};
   X11GC buttonGCs[__BUTTON_COUNT]= {0};

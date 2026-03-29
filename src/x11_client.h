@@ -351,11 +351,12 @@ typedef struct X11ChangePropertyReq{
 } __attribute__((packed)) X11ChangePropertyReq;
 
 
-// taken from https://gitlab.freedesktop.org/xorg/lib/libx11/-/blob/master/src/StName.c
-// @Verify
-#define X11A_WM_NAME ((X11Atom)39)
-#define X11A_STRING ((X11Atom)31)
+// section "Predefined Atoms" in the appendix B of the protocol
 #define X11A_ATOM ((X11Atom)4)
+#define X11A_STRING ((X11Atom)31)
+#define X11A_WM_NAME ((X11Atom)39)
+#define X11A_WM_NORMAL_HINTS ((X11Atom)40)
+#define X11A_WM_SIZE_HINTS ((X11Atom)41)
 
 
 typedef struct X11MapWindowReq {
