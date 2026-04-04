@@ -11,7 +11,7 @@ CC="gcc"
 for arg in "$@"; do declare $arg='1'; done
 if [ -v clang ]; then CC="clang"; fi
 
-CFLAGS="-Wall -Wextra -nostdlib -fno-builtin -fno-unwind-tables"
+CFLAGS="-Wall -Wextra -nostdlib -fno-builtin -fno-unwind-tables -fno-stack-protector -static"
 DEBUG_FLAGS="-g -DCLOSER_DEBUG=1 -DCLOSER_DISABLE=1"
 RELEASE_FLAGS="-O2"
 

@@ -684,8 +684,6 @@ int main(int argc, char* argv[], char* env[])
   Unused(argc);
   Unused(argv);
   g_envp = env;
-  char* otr = alloc(2137);
-  dealloc(otr);
 
   X11State state = {0};
   bool32 res = x11_init_connection(&state);
