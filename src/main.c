@@ -317,6 +317,7 @@ internal X11Atom x11_intern_atom(const char* name, bool8 onlyIfExists)
   
   X11InternAtomReply reply = {0};
   recv(g_connfd, (void*)&reply, sizeof(reply), 0);
+  DebugPrintf("reply: %u\n", reply.atom);
   return reply.atom;
 }
 
@@ -705,7 +706,9 @@ int main(int argc, char* argv[], char* env[])
   x11_window_set_name(window, mainWindowName, sizeof(mainWindowName)-1);
 
   X11Atom windowManager = x11_intern_atom("_NET_WM_WINDOW_TYPE", 0);
+  DebugPrintf("windowManager: %u\n", windowManager);
   X11Atom util = x11_intern_atom("_NET_WM_WINDOW_TYPE_UTILITY", 0);
+  DebugPrintf("util: %u\n", util);
 
   x11_change_property(
     window,
