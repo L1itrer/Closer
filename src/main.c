@@ -689,6 +689,15 @@ int main(int argc, char* argv[], char* env[])
   X11State state = {0};
   bool32 res = x11_init_connection(&state);
   if (res != TRUE) return 1;
+  // So this is biazarre but on xwayland simply opening the connection
+  // will not intern the atoms properly later, altough the server will
+  // not report any errors and the window will open just fine
+  // i have no idea why or how but re-establishing the connection 
+  // seems to "solve" the issue
+  // TODO: only do this on wayland
+  close(g_connfd);
+  res = x11_init_connection(&state);
+  if (res != TRUE) return 1;
 
   //x11_list_extensions();
   //x11_list_fonts("*");
