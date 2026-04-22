@@ -17,7 +17,7 @@ from within the project root run <em>build.sh</em> script.
 ./buils.sh
 ```
 
-If you append <em>clang</em> to the command the script will use clang instead of gcc. You can also append <em>release</em> to get optimized code. Also the buttons do nothing in debug mode, you just quit.
+If you append <em>clang</em> to the command the script will use clang instead of gcc. You can also append <em>release</em> to get optimized code. Also the buttons do nothing in debug mode, you just quit. Appending <em>asm</em> will also generate assembly.
 
 To build the release version with clang run:
 
@@ -25,7 +25,7 @@ To build the release version with clang run:
 ./build.sh release clang
 ```
 
-The order of arguments does not matter. Don't forget to add executable permissions to the script!
+The order of arguments does not matter.
 
 # References
 - The X11 protocol spec: [https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html](https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html)
