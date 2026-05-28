@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define packed __attribute__((packed))
 
 typedef size_t usize;
 typedef ptrdiff_t isize;
@@ -75,7 +76,7 @@ typedef struct X11Request{
   u8 majorOpcode;
   u16 length;
   u8 data;
-} __attribute__((packed)) X11Request;
+} packed X11Request;
 
 // Events and errors both have 32 bytes
 // you can read 32 bytes 
@@ -92,7 +93,7 @@ typedef struct X11EventExpose {
   X11Window window;
   card16 x, y, width, height, count;
   u8 unused2[14];
-} __attribute__((packed)) X11EventExpose;
+} packed X11EventExpose;
 
 // the structure for key press and button press events
 // they both share the exact same layout
@@ -112,7 +113,7 @@ typedef struct X11EventInput{
   u16 state;
   bool8 sameScreen;
   u8 unused;
-} __attribute__((packed)) X11EventInput;
+} packed X11EventInput;
 
 typedef struct X11EventClientMessage {
   u8 code;
@@ -125,7 +126,7 @@ typedef struct X11EventClientMessage {
 		u16 s[10];
 		u32 l[5];
 		} data;
-} __attribute__((packed)) X11EventClientMessage;
+} packed X11EventClientMessage;
 
 
 #define KEY_PRESS_Q 24
@@ -142,7 +143,7 @@ typedef struct X11GenericError {
   u8 error;
   u8 code;
   u8 otherBytes[30];
-} __attribute__((packed)) X11GenericError;
+} packed X11GenericError;
 
 
 #define MSG_ERROR 0
@@ -164,7 +165,7 @@ typedef struct X11Connection{
   u16 authProtocolDataLength;
   u16 unused2;
   //char data[]; // do not use! not gonna support auth anyway
-} __attribute__((packed)) X11Connection;
+} packed X11Connection;
 
 typedef struct X11SetupSuccessResponse {
   u8 code; // NOTE: only not in the struct because i read it first
@@ -190,13 +191,13 @@ typedef struct X11SetupSuccessResponse {
   // char* vendor;
   // *formats;
   // *screens;
-} __attribute__((packed)) X11SetupSuccessResponse;
+} packed X11SetupSuccessResponse;
 
 typedef struct X11SetupAuthenticateResponse {
   u8 code;
   u8 unused[5];
   u16 extraInfoLen;
-} __attribute__((packed)) X11SetupAuthenticateResponse;
+} packed X11SetupAuthenticateResponse;
 
 typedef struct X11SetupFailedResponse {
   u8 code;
@@ -204,12 +205,12 @@ typedef struct X11SetupFailedResponse {
   card16 protocolMajorVersion;
   card16 protocolMinorVersion;
   u16 responseLen;
-} __attribute__((packed)) X11SetupFailedResponse;
+} packed X11SetupFailedResponse;
 
 typedef struct X11Format {
   card8 depth, bitsPerLine, scanlinePad;
   u8 unused[5];
-} __attribute__((packed)) X11Format;
+} packed X11Format;
 
 typedef struct X11Screen {
   X11Window rootWindow;
@@ -229,7 +230,7 @@ typedef struct X11Screen {
   i8 rootDepth;
   i8 allowedDepthsCount;
   // ListOfDepthsHere
-} __attribute__((packed)) X11Screen;
+} packed X11Screen;
 
 typedef struct X11Depth {
   i8 depth;
@@ -237,7 +238,7 @@ typedef struct X11Depth {
   u16 numberOfVisuals;
   u32 unused2;
   // ListOfVisualsHere
-} __attribute__((packed)) X11Depth;
+} packed X11Depth;
 
 typedef struct X11VisualType {
   u32 visualId;
@@ -248,7 +249,7 @@ typedef struct X11VisualType {
   i32 greenMask;
   i32 blueMask;
   u32 unused;
-} __attribute__((packed)) X11VisualType;
+} packed X11VisualType;
 
 typedef struct X11Screens {
   X11Screen* data;
@@ -320,7 +321,7 @@ typedef struct X11CreateWindowReq{
   // list of values should be arbitrary
   // but in this project i will always need 3
   u32 values[X11_CW_VALUES_COUNT]; // list of value
-} __attribute__((packed)) X11CreateWindowReq;
+} packed X11CreateWindowReq;
 
 typedef struct X11CreateGCReq {
   u8 opcode;
@@ -330,7 +331,7 @@ typedef struct X11CreateGCReq {
   u32 drawable;
   u32 bitmask;
   // list of values follows
-} __attribute__((packed)) X11CreateGCReq;
+} packed X11CreateGCReq;
 
 
 #define X11_CHGP_REPLACE 0
@@ -348,7 +349,7 @@ typedef struct X11ChangePropertyReq{
   u8 unused[3];
   u32 formatLen;
   // bytes follow...
-} __attribute__((packed)) X11ChangePropertyReq;
+} packed X11ChangePropertyReq;
 
 
 // section "Predefined Atoms" in the appendix B of the protocol
@@ -363,7 +364,7 @@ typedef struct X11MapWindowReq {
   u8 opcode, unused;
   u16 requestLen;
   X11Window window;
-} __attribute__((packed)) X11MapWindowReq;
+} packed X11MapWindowReq;
 
 
 typedef struct X11MapSubwindowsReq {
@@ -371,7 +372,7 @@ typedef struct X11MapSubwindowsReq {
   u8 unused;
   u16 reqLen;
   X11Window window;
-} __attribute__((packed)) X11MapSubwindowsReq;
+} packed X11MapSubwindowsReq;
 
 
 typedef struct X11ClearAreaReq {
@@ -381,7 +382,7 @@ typedef struct X11ClearAreaReq {
   X11Window window;
   i16 x, y;
   card16 width, height;
-} __attribute__((packed)) X11ClearAreaReq;
+} packed X11ClearAreaReq;
 
 typedef struct X11ChangeWindowAttributesReq {
   u8 opcode;
@@ -389,7 +390,7 @@ typedef struct X11ChangeWindowAttributesReq {
   u16 reqLen;
   X11Window window;
   u32 bitmask;
-} __attribute__((packed)) X11ChangeWindowAttributesReq;
+} packed X11ChangeWindowAttributesReq;
 
 
 typedef struct X11InternAtomReq {
@@ -398,7 +399,7 @@ typedef struct X11InternAtomReq {
   u16 reqLen;
   u16 nameLen;
   u16 unused;
-} __attribute__((packed)) X11InternAtomReq;
+} packed X11InternAtomReq;
 
 typedef struct X11InternAtomReply {
   u8 reply;
@@ -407,7 +408,7 @@ typedef struct X11InternAtomReply {
   u32 replyLen; // always 0
   X11Atom atom; // can be null!
   u8 unused2[20];
-} __attribute__((packed))  X11InternAtomReply;
+} packed  X11InternAtomReply;
 
 typedef struct X11ListFontsReq {
   u8 opcode;
@@ -415,7 +416,7 @@ typedef struct X11ListFontsReq {
   u16 reqLen;
   card16 maxNames;
   u16 patternLen;
-} __attribute__((packed)) X11ListFontsReq;
+} packed X11ListFontsReq;
 
 typedef struct X11ListFontsReply {
   u8 reply;
@@ -424,7 +425,7 @@ typedef struct X11ListFontsReply {
   u32 replyLen;
   card16 fontNamesCount;
   u8 unused2[22];
-} __attribute__((packed)) X11ListFontsReply;
+} packed X11ListFontsReply;
 
 
 typedef struct X11PolyText8Req {
@@ -435,7 +436,7 @@ typedef struct X11PolyText8Req {
   X11GC gc;
   i16 x, y;
   // text and padding
-} __attribute__((packed)) X11PolyText8Req;
+} packed X11PolyText8Req;
 
 typedef struct X11TextItem8 {
   u8 strLen;
@@ -445,7 +446,7 @@ typedef struct X11TextItem8 {
 typedef struct X11ListExtensionsReq {
   u8 code, unused;
   u16 reqLen;
-} __attribute__((packed)) X11ListExtensionsReq;
+} packed X11ListExtensionsReq;
 
 typedef struct X11ListExtensionsReply {
   u8 reply;
@@ -453,6 +454,6 @@ typedef struct X11ListExtensionsReply {
   card16 sequenceNumber;
   u32 replyLen;
   u8 unused[24];
-} __attribute__((packed)) X11ListExtensionsReply;
+} packed X11ListExtensionsReply;
 
 #endif // X11_CLIENT_H

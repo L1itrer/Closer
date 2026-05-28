@@ -10,16 +10,21 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <poll.h>
 #include <netinet/in.h>
 #include <sys/un.h>
+#include <sys/types.h>
+
+
+void exit(int status);
 
 #include "closer.h"
+#include "arena.h"
 #include "x11_client.h"
 
-#include "syscalls.c"
 
 #define PrintCstr(cstr) write(1, cstr, sizeof(cstr)-1)
 
@@ -865,3 +870,8 @@ int main(int argc, char* argv[], char* env[])
   }
   return 0;
 }
+
+
+#include "syscalls.c"
+
+#include "arena.c"

@@ -177,7 +177,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 
 pid_t fork(void)
 {
-  return (int)(isize)syscall0((void*)SYS_FORK);
+  return (pid_t)(isize)syscall0((void*)SYS_FORK);
 }
 
 
@@ -188,6 +188,32 @@ int execve(const char *pathname, char *const argv[], char *const envp[])
     (void*)pathname,
     (void*)argv,
     (void*)envp
+  );
+}
+
+
+int open_sys(const char* filename, int flags, size_t mode)
+{
+  return (int)(isize)syscall3(
+    (void*)SYS_OPEN,
+    (void*)filename,
+    (void*)(isize)flags,
+    (void*)mode
+  );
+}
+
+int open(const char* filename, int flags, ...)
+{
+  return open_sys(filename, flags, 0);
+}
+
+int mprotect(void* start, size_t len, int prot)
+{
+  return (int)(isize)syscall3(
+    (void*)SYS_MPROTECT,
+    (void*)start,
+    (void*)len,
+    (void*)(isize)prot
   );
 }
 

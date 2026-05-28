@@ -127,21 +127,23 @@ __attribute__((naked)) void* syscall6
 }
 
 // defined per architecture as they can be in different places
-#define SYS_READ  0x00
-#define SYS_WRITE 0x01
-#define SYS_CLOSE 0x03
-#define SYS_POLL 0x07
-#define SYS_MMAP 0x09
-#define SYS_MUNMAP 0x0b
-#define SYS_SOCKET 0x29
-#define SYS_CONNECT 0x2a
-#define SYS_SENDTO 0x2c
-#define SYS_RECVFROM 0x2d
+#define SYS_READ       0x00
+#define SYS_WRITE      0x01
+#define SYS_OPEN       0x02
+#define SYS_CLOSE      0x03
+#define SYS_POLL       0x07
+#define SYS_MMAP       0x09
+#define SYS_MPROTECT   0x0A
+#define SYS_MUNMAP     0x0b
+#define SYS_SOCKET     0x29
+#define SYS_CONNECT    0x2a
+#define SYS_SENDTO     0x2c
+#define SYS_RECVFROM   0x2d
 #define SYS_SETSOCKOPT 0x36
 #define SYS_GETSOCKOPT 0x37
-#define SYS_FORK 0x39
-#define SYS_EXECVE 0x3b
-#define SYS_EXIT 0x3c
+#define SYS_FORK       0x39
+#define SYS_EXECVE     0x3b
+#define SYS_EXIT       0x3c
 
 
 
