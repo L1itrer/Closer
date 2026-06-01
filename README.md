@@ -14,7 +14,7 @@ I rely on certain compiler extensions, more specifically inline assembly and pac
 from within the project root run <em>build.sh</em> script.
 
 ```bash
-./buils.sh
+./build.sh
 ```
 
 If you append <em>clang</em> to the command the script will use clang instead of gcc. You can also append <em>release</em> to get optimized code. Also the buttons do nothing in debug mode, you just quit. Appending <em>asm</em> will also generate assembly.
